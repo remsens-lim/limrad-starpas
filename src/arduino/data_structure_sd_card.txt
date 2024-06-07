@@ -1,0 +1,1 @@
+day;month;year;hour;minute;seconds;milliseconds;gps-latitude;gps-lat;gps-longitude;gps-lon;gps-speed;gps-altitude;gps-satellites;gps-fixquality;ax;ay;az;gx;gy;gz;mx;my;mz;q0;qx;qy;qz;yaw;pitch;roll;temperature;pressure;
