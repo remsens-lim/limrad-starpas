@@ -1,0 +1,5 @@
+// Starpas default configuration
+{
+  // Connection details
+  "address": ""  // IP address of FTP server
+}
