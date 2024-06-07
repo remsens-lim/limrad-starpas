@@ -8,8 +8,10 @@ Welcome to LIMRAD-STARPAS's documentation!
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Documentation:
 
+   starpas/setup.md
+   arduino/setup.md
 
 
 Indices and tables
