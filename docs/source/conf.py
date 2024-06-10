@@ -99,6 +99,13 @@ napoleon_type_aliases = {
 #
 html_theme = 'alabaster'
 
+html_theme_options = {
+    # "fixed_sidebar": "true",
+    "logo": "lim-remsens-logo.png",
+    "logo_name": "true",
+    "description": "University of Leipzig, Institute for Meteorology"
+}
+
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
