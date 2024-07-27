@@ -1,0 +1,18 @@
+// Starpas default configuration
+{
+  "fname_raw": "{dt:%Y%m%d%H%M}.txt",
+  "fname_out" : "{dt:%Y-%m-%d}_starpas_{campaign}_{resolution}_{datalvl}.{sfx}",
+  // Config files
+  "file_log": "starpas.log",
+  "file_cfmeta": "share/starpas_cfmeta.json",
+  // Connection details
+  "address": "", // IP address of FTP server
+  "user": "", // FTP user
+  "passwd": "", // FTP passwd
+  // Meta information
+  "campaign": "", // Campaign name
+  "project": "", // Project name
+  "creator_name": "", // Processing User
+  "contributor_name": "", // Names of any contributing individual
+  "contributor_role": "" // Role of any of the contributing individuals
+}

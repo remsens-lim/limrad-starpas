@@ -24,6 +24,8 @@ setup(
         "pandas",
         "xarray",
         "netcdf4",
+        "addict",
+        "parse",
         "matplotlib",
         "pip",
         "jstyleson",

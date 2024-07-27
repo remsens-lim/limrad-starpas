@@ -1,0 +1,280 @@
+{
+  "attributes": {
+        "title"           : "LIM - STAbilized Radar Platform Alignment Sensor (STARPAS)",
+        "institution"     : "Leipzig University - Institute for Meteorology (LIM)",
+        "department"      : "Remote Sensing and the Arctic System",
+        "address"         : "Stefan Str. 3, 04103 Leipzig, Germany",
+        "source"          : "STAbilized Radar Platform Alignment Sensor (STARPAS)",
+        "contact_person"  : "Heike Kalesse-Los mailto:heike.kalesse@uni-leipzig.de",
+        "contributor_name": "{contributor_name}",
+        "contributor_role": "{contributor_role}",
+        "authors_software": "Jonas Witthuhn",
+        "creator_name"    : "{creator_name}",
+        "project"         : "{project}",
+        "references"      : "https://limrad-starpas.readthedocs.io/en/latest/",
+        "standard_name_vocabulary" : "CF Standard Name Table v81",
+        "conventions"     : "CF-1.10, ACDD-1.3",
+        "license"         : "CC-BY-SA 3.0"
+  },
+  "variables": {
+    "temperature": {
+      "type": "u2",
+      "attributes": {
+        "units": "K",
+        "long_name": "sensor temperature",
+        "standard_name": "temperature_of_sensor",
+        "scale_factor": 0.0016,
+        "add_offset": 243.15,
+        "_FillValue": 65535,
+        "valid_range": [
+          0,
+          62500
+        ],
+        "zlib": true
+      }
+    },
+    "pressure": {
+      "type": "u2",
+      "attributes": {
+        "units": "Pa",
+        "long_name": "air pressure",
+        "standard_name": "air_pressure",
+        "scale_factor": 0.4,
+        "add_offset": 85000,
+        "valid_range": [
+          0,
+          62500
+        ],
+        "_FillValue": 65535,
+        "zlib": true
+      }
+    },
+    "lat": {
+      "type": "u4",
+      "attributes": {
+        "standard_name": "latitude",
+        "units": "degree_north",
+        "scale_factor": 1e-6,
+        "add_offset": -90,
+        "valid_range": [
+          0,
+          180e6
+        ],
+        "_FillValue": 4294967295,
+        "zlib": true
+      }
+    },
+    "lon": {
+      "type": "u4",
+      "attributes": {
+        "standard_name": "longitude",
+        "units": "degree_east",
+        "scale_factor": 1e-6,
+        "add_offset": -180,
+        "valid_range": [
+          0,
+          360e6
+        ],
+        "_FillValue": 4294967295,
+        "zlib": true
+      }
+    },
+    "altitude": {
+      "type": "i2",
+      "attributes": {
+        "standard_name": "altitude",
+        "units": "m",
+        "_FillValue": -1,
+        "zlib": true
+      }
+    },
+    "gps-speed": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "platform_speed_wrt_ground",
+        "units": "",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "gps-satellites": {
+      "type": "u2",
+      "attributes": {
+        "standard_name": "count",
+        "units": "",
+        "zlib": true,
+        "_FillValue": 65535
+      }
+    },
+    "gps-fixquality": {
+      "type": "u2",
+      "attributes": {
+        "standard_name": "quality_flag",
+        "units": "",
+        "zlib": true,
+        "_FillValue": 65535
+      }
+    },
+    "ax": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "acceleration_x",
+        "units": "mg",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "ay": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "acceleration_y",
+        "units": "mg",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "az": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "acceleration_z",
+        "units": "mg",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "gx": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "angular_velocity_x",
+        "units": "deg s-1",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "gy": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "angular_velocity_y",
+        "units": "deg s-1",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "gz": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "angular_velocity_z",
+        "units": "deg s-1",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "mx": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "magnetic_field_x",
+        "units": "uT",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "my": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "magnetic_field_y",
+        "units": "uT",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "mz": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "magnetic_field_z",
+        "units": "uT",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "q0": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "quaternion_0",
+        "units": "",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "qx": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "quaternion_x",
+        "units": "",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "qy": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "quaternion_y",
+        "units": "",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "qz": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "quaternion_z",
+        "units": "",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "roll": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "platform_roll",
+        "units": "deg",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "pitch": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "platform_pitch",
+        "units": "deg",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
+    "yaw": {
+      "type": "i4",
+      "attributes": {
+        "standard_name": "platform_yaw",
+        "units": "deg",
+        "scale_factor": 1e-2,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    }
+  }
+}
