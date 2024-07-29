@@ -245,7 +245,7 @@ def read_raw(fname, config=None, global_attrs=None):
         "raw_files": [os.path.basename(fname),],
         'processing_level': 'l1a',
         'product_version': starpas.__version__,
-        'history': f'{now.isoformat()}: Generated level l1a  by mordor version {starpas.__version__}; ',
+        'history': f'{now.isoformat()}: Generated level l1a  by starpas version {starpas.__version__}; ',
     })
     ds.attrs.update(gattrs)
 

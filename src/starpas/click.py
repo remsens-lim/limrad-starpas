@@ -90,3 +90,19 @@ def raw2l1a(input_files,
             outfile = outfile.format_map(fname_info)
 
             starpas.data.to_netcdf(ds, fname=outfile)
+
+
+@cli.command("check")
+@click.option("--config", "-c", type=click.Path(dir_okay=False, exists=True),
+              help="Config file - will merge and override the default config.")
+def checktoday(config):
+    config = _configure(config)
+    starpas.utils.init_logger(config)
+
+    now = dt.datetime.utcnow()
+    start = dt.datetime(now.year,now.month,now.day,0,0,0)
+    fnames = starpas.ftp.fnames_in_period(start, now)[:]
+    fnames_ftp = starpas.ftp.check_ftp_files(fnames, config=config)
+
+    print(f"For today there are {len(fnames_ftp)} files on the FTP server.")
+    print(f"The last recorded file is {fnames_ftp[-1]}.")
