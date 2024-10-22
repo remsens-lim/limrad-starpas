@@ -666,12 +666,14 @@ def estimate_dangle(ds,vector=np.array([0,0,1]), rotation=(1,1,1), degrees=True)
 def calc_imufusion(l1a, config=None):
     config = merge_config(config)
 
+    logger.info("calc imufusion")
+
     xyz_index = config["axis_mapping"]["xyz_index"]
     xyz_direction = np.array(config["axis_mapping"]["xyz_direction"])[None,:]
 
     timestamp = (l1a.time.values - l1a.time.values[0]).astype("timedelta64[ns]").astype(float) * 1e-9
-    freq = int(np.round(1./np.diff(timestamp),0)) # sample rate in Hz
-
+    freq = int(np.round(1./np.nanmean(np.diff(timestamp)),0)) # sample rate in Hz
+    logger.info(f".. sample rate {freq} Hz")
     gyr = np.vstack([l1a.gx.data, l1a.gy.data, l1a.gz.data]).T
     gyr = gyr[:, xyz_index] * xyz_direction
 
