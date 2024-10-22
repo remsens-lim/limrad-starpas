@@ -13,6 +13,15 @@ Welcome to LIMRAD-STARPAS's documentation!
    starpas/setup.md
    arduino/setup.md
 
+Code Documentation
+==================================
+
+.. toctree::
+   :maxdepth: 2
+   :numbered:
+   :caption: Code:
+
+   code_docs/autodocs.rst
 
 Indices and tables
 ==================
