@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import logging
 import importlib
 import os
+import imufusion
 import jstyleson as json
 from toolz import keyfilter
 from operator import itemgetter
@@ -661,3 +662,53 @@ def estimate_dangle(ds,vector=np.array([0,0,1]), rotation=(1,1,1), degrees=True)
     # The returned value of yaw_inst describes the rotation of the instrument relative to the
     # ship heading, and is only for control
     return (delta_roll, delta_pitch), yaw_inst
+
+def calc_imufusion(l1a, config=None):
+    config = merge_config(config)
+
+    xyz_index = config["axis_mapping"]["xyz_index"]
+    xyz_direction = np.array(config["axis_mapping"]["xyz_direction"])[None,:]
+
+    timestamp = (l1a.time.values - l1a.time.values[0]).astype("timedelta64[ns]").astype(float) * 1e-9
+    freq = int(np.round(1./np.diff(timestamp),0)) # sample rate in Hz
+
+    gyr = np.vstack([l1a.gx.data, l1a.gy.data, l1a.gz.data]).T
+    gyr = gyr[:, xyz_index] * xyz_direction
+
+    if config["imufusion"]["use_mag"]:
+        mag = np.vstack([l1a.mx.data, l1a.my.data, l1a.mz.data]).T
+        mag = mag[:, xyz_index] * xyz_direction
+
+    acc = np.vstack([l1a.ax.data, l1a.ay.data, l1a.az.data]).T
+    acc = acc*1e-3 # mg -> g
+    acc = acc[:, xyz_index] * xyz_direction
+    acc[:,2] += 2 # remove gravitation acceleration
+
+    offset = imufusion.Offset(freq)
+    ahrs = imufusion.Ahrs()
+
+    ahrs.settings = imufusion.Settings(
+        imufusion.CONVENTION_NWU,  # convention North-West-Up = Bow-Portside-Up
+        config["imufusion"]["gain"],  # gain
+        config["imufusion"]["gyro_range"],  # gyroscope range
+        config["imufusion"]["acc_reject"],  # acceleration rejection
+        config["imufusion"]["mag_reject"],  # magnetic rejection
+        config["imufusion"]["recovery"] * freq  # recovery trigger period = 5 seconds
+    )
+
+    delta_time = np.diff(timestamp, prepend=timestamp[0])
+    euler = np.empty((len(timestamp), 3))
+
+    if config["imufusion"]["use_mag"]:
+        for index in range(len(timestamp)):
+            gyr[index] = offset.update(gyr[index])
+            ahrs.update(gyr[index], acc[index], mag[index], delta_time[index])
+            euler[index] = ahrs.quaternion.to_euler()
+    else:
+        for index in range(len(timestamp)):
+            gyr[index] = offset.update(gyr[index])
+            ahrs.update_no_magnetometer(gyr[index], acc[index], delta_time[index])
+            euler[index] = ahrs.quaternion.to_euler()
+
+
+    return euler

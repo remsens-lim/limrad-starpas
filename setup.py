@@ -31,6 +31,7 @@ setup(
         "jstyleson",
         "Click",
         "toolz",
+        "imufusion"
     ],
     extras_require={
         "nbs": [
