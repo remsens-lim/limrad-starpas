@@ -1,4 +1,5 @@
 import os.path
+import shutil
 import warnings
 
 import click
@@ -55,6 +56,7 @@ def downloadraw(start_date: str,
         check_ftp=True,
     )
 
+
 @cli.command("raw2l1a")
 @click.argument("input_files", nargs=-1)
 @click.argument("output_path", nargs=1)
@@ -90,6 +92,12 @@ def raw2l1a(input_files,
             outfile = outfile.format_map(fname_info)
 
             starpas.data.to_netcdf(ds, fname=outfile)
+    # add readme to output path
+    fname_readme = os.path.join(
+        importlib.resources.files("starpas"),
+        "share/README.l1a.md"
+    )
+    shutil.copy2(fname_readme, output_path)
 
 
 @cli.command("check")
