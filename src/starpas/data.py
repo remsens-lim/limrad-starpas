@@ -4,6 +4,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import logging
+import jstyleson as json
 
 import starpas.utils
 
@@ -212,7 +213,7 @@ def read_raw(fname, config=None, global_attrs=None):
         {
             "lat": ("time", latitude),
             "lon": ("time", longitude),
-            "gps-speed": ("time", data[:, 11].astype(float)),
+            "gps-speed": ("time", 0.514444 * data[:, 11].astype(float)), #(m/s)
             "altitude": ("time", data[:, 12].astype(float)),
             "gps-satellites": ("time", data[:, 13].astype(np.ushort)),
             "gps-fixquality": ("time", data[:, 14].astype(np.ushort)),
@@ -263,3 +264,53 @@ def read_raw(fname, config=None, global_attrs=None):
     # add encoding to Dataset
     ds = add_encoding(ds, vencode)
     return ds
+
+
+def l1a2l1b(l1a, config=None):
+    config = starpas.utils.merge_config(config)
+    gattrs, vattrs, vencode = get_cfmeta(config)
+
+    # apply imufusion algorithm
+    euler = starpas.utils.calc_imufusion(l1a, config=config)
+
+    l1b = xr.Dataset({
+        "roll": ("time",euler[:,0]),
+        "pitch": ("time", euler[:,1]),
+        "yaw": ("time", euler[:,2]),
+        "temperature": l1a.temperature,
+        "pressure": l1a.pressure,
+        "lat": l1a.lat,
+        "lon": l1a.lon,
+        "gps-speed": l1a["gps-speed"],
+        "altitude": l1a.altitude,
+        "gps-satellites": l1a["gps-satellites"],
+        "gps-fixquality": l1a["gps-fixquality"]
+    }, coords={
+        "time": l1a.time
+    })
+
+
+    now = pd.to_datetime(np.datetime64("now"))
+    gattrs.update({
+        'imufusion_axismapping': json.dumps(config["axis_mapping"]),
+        'imufusion_settings': json.dumps(config["imufusion"]),
+        'processing_level': 'l1b',
+        'product_version': starpas.__version__,
+        'history': f'{now.isoformat()}: Generated level l1b  by starpas version {starpas.__version__}; ',
+    })
+    l1b.attrs.update(gattrs)
+
+    # add global coverage attributes
+    l1b = update_coverage_meta(l1b, timevar="time")
+
+    # add attributes to Dataset
+    for k, v in vattrs.items():
+        if k not in l1b.keys():
+            continue
+        # iterate over suffixed variables
+        for ki in [key for key in l1b if key.startswith(k)]:
+            l1b[ki].attrs.update(v)
+
+    # add encoding to Dataset
+    l1b = add_encoding(l1b, vencode)
+    return l1b

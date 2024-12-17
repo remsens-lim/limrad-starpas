@@ -674,6 +674,7 @@ def calc_imufusion(l1a, config=None):
     timestamp = (l1a.time.values - l1a.time.values[0]).astype("timedelta64[ns]").astype(float) * 1e-9
     freq = int(np.round(1./np.nanmean(np.diff(timestamp)),0)) # sample rate in Hz
     logger.info(f".. sample rate {freq} Hz")
+
     gyr = np.vstack([l1a.gx.data, l1a.gy.data, l1a.gz.data]).T
     gyr = gyr[:, xyz_index] * xyz_direction
 
@@ -684,13 +685,13 @@ def calc_imufusion(l1a, config=None):
     acc = np.vstack([l1a.ax.data, l1a.ay.data, l1a.az.data]).T
     acc = acc*1e-3 # mg -> g
     acc = acc[:, xyz_index] * xyz_direction
-    acc[:,2] += 2 # remove gravitation acceleration
+    acc *= -1. # flip acceleration for imufusion convention
 
     offset = imufusion.Offset(freq)
     ahrs = imufusion.Ahrs()
 
     ahrs.settings = imufusion.Settings(
-        imufusion.CONVENTION_NWU,  # convention North-West-Up = Bow-Portside-Up
+        imufusion.CONVENTION_NED,  # convention North-East-Down = Bow-Starboard-Down
         config["imufusion"]["gain"],  # gain
         config["imufusion"]["gyro_range"],  # gyroscope range
         config["imufusion"]["acc_reject"],  # acceleration rejection
@@ -712,5 +713,11 @@ def calc_imufusion(l1a, config=None):
             ahrs.update_no_magnetometer(gyr[index], acc[index], delta_time[index])
             euler[index] = ahrs.quaternion.to_euler()
 
+    # allow for 30s settling after data gap >1s
+    # this prevents overshooting of angles due interpolation of gyro over the data gap
+    mask = np.array([True]+ list(np.diff(l1a.time.values)>np.timedelta64(1,'s')))
+    for i in np.argwhere(mask).ravel():
+        mask[i:i+int(np.ceil(30*freq))] = True
+    euler[mask,:] = np.nan
 
     return euler

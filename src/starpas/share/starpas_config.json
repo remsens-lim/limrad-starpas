@@ -9,17 +9,17 @@
   // Mapping sensor axis to (Bow, Portside, Up) Coordinate system
   "axis_mapping": {
     // bowtie 2024: (sensor-x:up, sensor-y:rear, sensor-z:starboard)
-    "xyz_index": [1,2,0], // sort axis to (sensor-y,sensor-z,sensor-x)
-    "xyz_direction": [-1,-1,1] // invert axis to (-1 sensor-y, -1 sensor-z, sensor-x)
+    "xyz_index": [1, 2, 0], // sort axis to (sensor-y,sensor-z,sensor-x)
+    "xyz_direction": [-1, 1, -1] // invert axis to (-1 sensor-y, sensor-z, -1 sensor-x)
   },
   // IMU Fusion settings
   "imufusion": {
     "use_mag": false, // ignore magnetometer (false), use magnetometer (true)
-    "gain": 0.5, // influence ratio of acc+mag versus gyro. 0: only gyro
+    "gain": 0.333, // influence ratio of acc+mag versus gyro. 0: only gyro
     "gyro_range": 2000, // gyroscope-range (deg/s)
-    "acc_reject": 10, // reject accelerometer if deviates more than X deg from algo output
-    "mag_reject": 10, // reject magnetometer if deviates more than X deg from algo output
-    "recovery": 5 // recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
+    "acc_reject": 2, // reject accelerometer if deviates more than X deg from algo output
+    "mag_reject": 2, // reject magnetometer if deviates more than X deg from algo output
+    "recovery": 1 // recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
   },
   // Connection details
   "address": "", // IP address of FTP server
