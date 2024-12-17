@@ -10,7 +10,7 @@ setup(
     license="OSI Approved :: GNU General Public License v3 (GPLv3)",
     packages=["starpas"],
     package_dir={"": "src"},
-    package_data={"starpas": ["share/*.json"]},
+    package_data={"starpas": ["share/*.json", "share/*.md"]},
     include_package_data=True,
     entry_points={
         'console_scripts': [
