@@ -5,10 +5,10 @@ This data stores the level 1a product from the STAbilized Radar Platform Alignme
 Sensor observation are on a karthesic coordinate system. Relative to the STARPAS-BOX the axis are as follows:
 
 top view  | side view
-╔═══════╗ |   ^z
-║ y     ║ | ╔══════╗
-║ │     ║ | ╠══════╣
-║zo─> x ║ | ║ O O  ║ -> x
+╔═══════╗ |   ↑z
+║ x     ║ | ╔══════╗
+║ ↑     ║ | ╠══════╣
+║zo → y ║ | ║ O O  ║ → y
 ╚═╦═╦═══╝ | ╚══════╝
 cables    |
 

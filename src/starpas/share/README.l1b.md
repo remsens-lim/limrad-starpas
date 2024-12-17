@@ -6,10 +6,10 @@ This is like raw data but euler angles are reprocessed with the Madgwick Algorit
 Sensor observation are on a karthesic coordinate system. Relative to the STARPAS-BOX the axis are as follows:
 
 top view  | side view
-╔═══════╗ |   ^z
-║ y     ║ | ╔══════╗
-║ │     ║ | ╠══════╣
-║zo─> x ║ | ║ O O  ║ -> x
+╔═══════╗ |   ↑z
+║ x     ║ | ╔══════╗
+║ ↑     ║ | ╠══════╣
+║zo → y ║ | ║ O O  ║ → y
 ╚═╦═╦═══╝ | ╚══════╝
 cables    |
 
