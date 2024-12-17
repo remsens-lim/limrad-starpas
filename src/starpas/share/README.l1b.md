@@ -1,17 +1,20 @@
 # STARPAS l1b data
 This data stores the level 1a product from the STAbilized Radar Platform Alignment Sensor (STARPAS). 
-This is like raw data but euler angles are reprocessed with the Madgwick Algorithm (https://pypi.org/project/imufusion/). For settings and configuration see the imufusion group in the netcdf files.
+This is like raw data but euler angles are reprocessed with the Madgwick Algorithm (https://pypi.org/project/imufusion/). For settings and configuration see the netcdf global attributes.
 
 ## Coordinate system:
 Sensor observation are on a karthesic coordinate system. Relative to the STARPAS-BOX the axis are as follows:
+> Note: The x-Axis printed on the sensor board is the direction of the Accelerometer-Chip axis, but internally all sensor axis are transformed to obey the coordinate system given below. 
+
+[Sentral README](https://github.com/gregtomasch/EM7180_SENtral_Calibration?tab=readme-ov-file#sentral-coordinate-system-definition)
 
 top view  | side view
-╔═══════╗ |   ↑z
+╔═══════╗ |   
 ║ x     ║ | ╔══════╗
 ║ ↑     ║ | ╠══════╣
-║zo → y ║ | ║ O O  ║ → y
+║zX → y ║ | ║ O O  ║ → y
 ╚═╦═╦═══╝ | ╚══════╝
-cables    |
+cables    |    ↓z
 
 ## Dimensions:
 * *time*: 20Hz resolution
