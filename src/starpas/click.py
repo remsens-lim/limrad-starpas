@@ -100,6 +100,50 @@ def raw2l1a(input_files,
     shutil.copy2(fname_readme, output_path)
 
 
+@cli.command("l1a2l1b")
+@click.argument("input_files", nargs=-1)
+@click.argument("output_path", nargs=1)
+@click.option("--config", "-c", type=click.Path(dir_okay=False, exists=True),
+              help="Config file - will merge and override the default config.")
+def l1a2l1b(input_files,
+                output_path: str,
+                config):
+    config = _configure(config)
+    starpas.utils.init_logger(config)
+
+    with click.progressbar(
+            input_files,
+            label='Processing to l1b:',
+            item_show_func=lambda a:a
+    ) as files:
+        for fn in files:
+            l1a = xr.load_dataset(fn)
+            l1b = starpas.data.l1a2l1b(l1a, config=config)
+
+            fname_info = parse.parse(
+                config["fname_out"],
+                os.path.basename(fn)
+            ).named
+            fname_info.update({
+                "campaign": config["campaign"],
+                "resolution": "20Hz",
+                "datalvl": "l1b",
+                "sfx": "nc"
+            })
+            outfile = os.path.join(output_path,
+                                   "{dt:%Y/%m/}",
+                                   config['fname_out'])
+            outfile = outfile.format_map(fname_info)
+
+            starpas.data.to_netcdf(l1b, fname=outfile)
+
+    # add readme to output path
+    fname_readme = os.path.join(
+        importlib.resources.files("starpas"),
+        "share/README.l1b.md"
+    )
+    shutil.copy2(fname_readme, output_path)
+
 @cli.command("check")
 @click.option("--config", "-c", type=click.Path(dir_okay=False, exists=True),
               help="Config file - will merge and override the default config.")
