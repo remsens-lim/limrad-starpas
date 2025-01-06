@@ -180,6 +180,11 @@ def read_raw(fname, config=None, global_attrs=None):
     # make data array
     data = np.vstack(np.char.split(result, ';'))
 
+    # Fix: sometimes only the last two year digits are reported
+    # in this case, add "20"
+    ylen = np.char.str_len(data[:,2])
+    data[ylen==2,2] = np.char.add("20",data[ylen==2,2])
+
     # parse datetime
     dates = np.char.add(data[:, 2], '-')
     dates = np.char.add(dates, np.char.zfill(data[:, 1], 2))
