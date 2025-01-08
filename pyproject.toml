@@ -44,7 +44,7 @@ tag_prefix = "starpas-"
 parentdir_prefix = "starpas-"
 
 [tool.setuptools.dynamic]
-version = {attr = "starpas.version"}
+version = {attr = "starpas.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
