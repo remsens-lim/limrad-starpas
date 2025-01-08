@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools", "wheel", "versioneer[toml]"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "starpas"
+dynamic = ["version"]
+description = "A Python module for handling the data of the STAbilized Radar Platform Alignment Sensor (STARPAS)"
+authors = [
+    {name = "Jonas Witthuhn", email = "witthuhn@tropos.de"}
+]
+license = {text = "GNU General Public License v3 (GPLv3)"}
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "xarray",
+    "netcdf4",
+    "Bottleneck",
+    "addict",
+    "parse",
+    "matplotlib",
+    "pip",
+    "jstyleson",
+    "Click",
+    "toolz",
+    "imufusion"
+]
+
+[project.optional-dependencies]
+nbs = ["jupyter", "nbdev", "nbformat"]
+docs = ["sphinx", "myst-parser", "myst-nb"]
+
+[project.entry-points.console_scripts]
+starpas = "starpas.click:cli"
+
+[tool.versioneer]
+VCS = "git"
+style = "pep440"
+versionfile_source = "src/starpas/_version.py"
+versionfile_build = "starpas/_version.py"
+tag_prefix = "starpas-"
+parentdir_prefix = "starpas-"
+
+[tool.setuptools.dynamic]
+version = {attr = "starpas.version"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["starpas"]
+
+[tool.setuptools.package-data]
+starpas = ["share/*.json", "share/*.md"]
