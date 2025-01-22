@@ -275,6 +275,34 @@
         "_FillValue": 2147483647,
         "zlib": true
       }
+    },
+    "fusion_states": {
+      "type":"f4",
+      "attributes":{
+        "long_name": "States reported by sensore fusion algorithm",
+        "meaning": [
+          "acceleration_error",
+          "acceleration_ignored",
+          "acceleration_recover_trigger",
+          "magnetic_error",
+          "magnetometer_ignored",
+          "magnetic_recovery_trigger"
+        ],
+        "zlib": true
+      }
+    },
+    "fusion_flags": {
+      "type":"u1",
+      "attributes":{
+        "long_name": "Flags reported by sensore fusion algorithm",
+        "meaning": [
+          "initializing",
+          "angular_rate_recovery",
+          "acceleration_recovery",
+          "magnetic_recovery"
+        ],
+        "zlib": true
+      }
     }
   }
 }

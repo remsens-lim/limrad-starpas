@@ -14,12 +14,13 @@
   },
   // IMU Fusion settings
   "imufusion": {
+    "freq": 20, // sample frequency (Hz)
     "use_mag": false, // ignore magnetometer (false), use magnetometer (true)
     "gain": 0.333, // influence ratio of acc+mag versus gyro. 0: only gyro
     "gyro_range": 2000, // gyroscope-range (deg/s)
-    "acc_reject": 2, // reject accelerometer if deviates more than X deg from algo output
+    "acc_reject": 0.5, // reject accelerometer if deviates more than X deg from algo output
     "mag_reject": 2, // reject magnetometer if deviates more than X deg from algo output
-    "recovery": 1 // recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
+    "recovery": 30 // recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
   },
   // Connection details
   "address": "", // IP address of FTP server

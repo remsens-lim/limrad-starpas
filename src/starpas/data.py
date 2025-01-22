@@ -276,12 +276,38 @@ def l1a2l1b(l1a, config=None):
     gattrs, vattrs, vencode = get_cfmeta(config)
 
     # apply imufusion algorithm
-    euler = starpas.utils.calc_imufusion(l1a, config=config)
+    time, euler, istates, flags = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", config=config)
+    accconfig = dict(imufusion={
+        "use_mag": False, 
+        "gain": 1, 
+        "gyro_range": 2000, # gyroscope-range (deg/s)
+        "acc_reject": 5, # reject accelerometer if deviates more than X deg from algo output
+        "mag_reject": 5, # reject magnetometer if deviates more than X deg from algo output
+        "recovery": 30 # recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
+    })
+    _,euleracc,_,_ = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min" , config={**config, **accconfig})
+    gyrconfig = dict(imufusion={
+        "use_mag": False, 
+        "gain": 0, 
+        "gyro_range": 2000, # gyroscope-range (deg/s)
+        "acc_reject": 0, # reject accelerometer if deviates more than X deg from algo output
+        "mag_reject": 5, # reject magnetometer if deviates more than X deg from algo output
+        "recovery": 120 # recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
+    })
+    _,eulergyr,_,_ = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", filtfreq=1/60., config={**config,**gyrconfig})
 
     l1b = xr.Dataset({
         "roll": ("time",euler[:,0]),
         "pitch": ("time", euler[:,1]),
         "yaw": ("time", euler[:,2]),
+        "roll_acc": ("time", euleracc[:,0]),
+        "pitch_acc": ("time", euleracc[:,1]),
+        "yaw_acc": ("time", euleracc[:,2]),
+        "roll_gyr": ("time", eulergyr[:,0]),
+        "pitch_gyr": ("time", eulergyr[:,1]),
+        "yaw_gyr": ("time", eulergyr[:,2]),
+        "fusion_states": (("time","states"), istates),
+        "fusion_flags":(("time","flags"), flags),
         "temperature": l1a.temperature,
         "pressure": l1a.pressure,
         "lat": l1a.lat,
@@ -291,7 +317,9 @@ def l1a2l1b(l1a, config=None):
         "gps-satellites": l1a["gps-satellites"],
         "gps-fixquality": l1a["gps-fixquality"]
     }, coords={
-        "time": l1a.time
+        "time": ("time",time),
+        "states": ("states",np.arange(6)),
+        "flags": ("flags", np.arange(4))
     })
 
 

@@ -663,7 +663,7 @@ def estimate_dangle(ds,vector=np.array([0,0,1]), rotation=(1,1,1), degrees=True)
     # ship heading, and is only for control
     return (delta_roll, delta_pitch), yaw_inst
 
-def calc_imufusion(l1a, config=None):
+def calc_imufusion(l1a, freq=20, heading=None, config=None):
     config = merge_config(config)
 
     logger.info("calc imufusion")
@@ -672,7 +672,7 @@ def calc_imufusion(l1a, config=None):
     xyz_direction = np.array(config["axis_mapping"]["xyz_direction"])[None,:]
 
     timestamp = (l1a.time.values - l1a.time.values[0]).astype("timedelta64[ns]").astype(float) * 1e-9
-    freq = int(np.round(1./np.nanmean(np.diff(timestamp)),0)) # sample rate in Hz
+    # freq = int(np.round(1./np.nanmean(np.diff(timestamp)),0)) # sample rate in Hz
     logger.info(f".. sample rate {freq} Hz")
 
     gyr = np.vstack([l1a.gx.data, l1a.gy.data, l1a.gz.data]).T
@@ -701,23 +701,138 @@ def calc_imufusion(l1a, config=None):
 
     delta_time = np.diff(timestamp, prepend=timestamp[0])
     euler = np.empty((len(timestamp), 3))
-
-    if config["imufusion"]["use_mag"]:
-        for index in range(len(timestamp)):
-            gyr[index] = offset.update(gyr[index])
-            ahrs.update(gyr[index], acc[index], mag[index], delta_time[index])
-            euler[index] = ahrs.quaternion.to_euler()
+    internal_states = np.empty((len(timestamp), 6))
+    flags = np.empty((len(timestamp), 4))
+    if heading is None:
+        if config["imufusion"]["use_mag"]:
+            for index in range(len(timestamp)):
+                gyr[index] = offset.update(gyr[index])
+                ahrs.update(gyr[index], acc[index], mag[index], delta_time[index])
+                euler[index] = ahrs.quaternion.to_euler()
+                
+                ahrs_internal_states = ahrs.internal_states
+                internal_states[index] = np.array(
+                    [
+                        ahrs_internal_states.acceleration_error,
+                        ahrs_internal_states.accelerometer_ignored,
+                        ahrs_internal_states.acceleration_recovery_trigger,
+                        ahrs_internal_states.magnetic_error,
+                        ahrs_internal_states.magnetometer_ignored,
+                        ahrs_internal_states.magnetic_recovery_trigger,
+                    ]
+                )
+            
+                ahrs_flags = ahrs.flags
+                flags[index] = np.array(
+                    [
+                        ahrs_flags.initialising,
+                        ahrs_flags.angular_rate_recovery,
+                        ahrs_flags.acceleration_recovery,
+                        ahrs_flags.magnetic_recovery,
+                    ]
+                )
+        else:
+            for index in range(len(timestamp)):
+                gyr[index] = offset.update(gyr[index])
+                ahrs.update_no_magnetometer(gyr[index], acc[index], delta_time[index])
+                euler[index] = ahrs.quaternion.to_euler()
+    
+                ahrs_internal_states = ahrs.internal_states
+                internal_states[index] = np.array(
+                    [
+                        ahrs_internal_states.acceleration_error,
+                        ahrs_internal_states.accelerometer_ignored,
+                        ahrs_internal_states.acceleration_recovery_trigger,
+                        ahrs_internal_states.magnetic_error,
+                        ahrs_internal_states.magnetometer_ignored,
+                        ahrs_internal_states.magnetic_recovery_trigger,
+                    ]
+                )
+            
+                ahrs_flags = ahrs.flags
+                flags[index] = np.array(
+                    [
+                        ahrs_flags.initialising,
+                        ahrs_flags.angular_rate_recovery,
+                        ahrs_flags.acceleration_recovery,
+                        ahrs_flags.magnetic_recovery,
+                    ]
+                )
     else:
         for index in range(len(timestamp)):
             gyr[index] = offset.update(gyr[index])
-            ahrs.update_no_magnetometer(gyr[index], acc[index], delta_time[index])
+            ahrs.update_external_heading(gyr[index], acc[index], heading[index], delta_time[index])
             euler[index] = ahrs.quaternion.to_euler()
+   
+            ahrs_internal_states = ahrs.internal_states
+            internal_states[index] = np.array(
+                [
+                    ahrs_internal_states.acceleration_error,
+                    ahrs_internal_states.accelerometer_ignored,
+                    ahrs_internal_states.acceleration_recovery_trigger,
+                    ahrs_internal_states.magnetic_error,
+                    ahrs_internal_states.magnetometer_ignored,
+                    ahrs_internal_states.magnetic_recovery_trigger,
+                ]
+            )
+        
+            ahrs_flags = ahrs.flags
+            flags[index] = np.array(
+                [
+                    ahrs_flags.initialising,
+                    ahrs_flags.angular_rate_recovery,
+                    ahrs_flags.acceleration_recovery,
+                    ahrs_flags.magnetic_recovery,
+                ]
+            )
 
     # allow for 30s settling after data gap >1s
     # this prevents overshooting of angles due interpolation of gyro over the data gap
-    mask = np.array([True]+ list(np.diff(l1a.time.values)>np.timedelta64(1,'s')))
-    for i in np.argwhere(mask).ravel():
-        mask[i:i+int(np.ceil(30*freq))] = True
-    euler[mask,:] = np.nan
+    # mask = np.array([True]+ list(np.diff(l1a.time.values)>np.timedelta64(1,'s')))
+    # for i in np.argwhere(mask).ravel():
+    #     mask[i:i+int(np.ceil(30*freq))] = True
+    # euler[mask,:] = np.nan
 
-    return euler
+    time = l1a.time.values
+
+    return time, euler, internal_states, flags
+
+## slice by large gaps
+def apply_imufusion(l1a,freq=20,gap="1h",filtfreq=None,heading=None,config=None):
+    dtime = np.diff(l1a.time.values)
+    igap = np.array([-1] + list(np.argwhere(dtime>pd.Timedelta(gap)).ravel()) + [-1])
+
+    new = True
+    for istart,iend in zip(igap[:-1]+1,igap[1:]):
+        # 'print(iend-istart)
+        # print(l1a.time.values[istart],l1a.time.values[iend])
+        itime, ieuler, iinternal_states, iflags = calc_imufusion(l1a.isel(time=slice(istart,iend)),freq=20,heading=heading, config=config)
+
+        if filtfreq is not None:
+            print(len(ieuler[:,0]))
+            for i in range(3):
+                ieuler[:,i] = butter_highpass_filter(ieuler[:,i],filtfreq,freq)
+        
+        if new:
+            euler = ieuler.copy()
+            time = itime.copy()
+            internal_states = iinternal_states.copy()
+            flags = iflags.copy()
+            new = False
+        else:
+            euler = np.vstack((euler,ieuler))
+            internal_states = np.vstack((internal_states,iinternal_states))
+            flags = np.vstack((flags,iflags))
+            time = np.hstack((time,itime))
+    return time, euler, internal_states, flags
+
+def butter_highpass(cutoff, fs, order=5):
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+    b, a = signal.butter(order, normal_cutoff, btype='high', analog=False)
+    return b, a
+
+def butter_highpass_filter(data, cutoff, fs, order=5):
+    b, a = butter_highpass(cutoff, fs, order=order)
+    y = signal.filtfilt(b, a, data)
+    return y
