@@ -809,7 +809,6 @@ def apply_imufusion(l1a,freq=20,gap="1h",filtfreq=None,heading=None,config=None)
         itime, ieuler, iinternal_states, iflags = calc_imufusion(l1a.isel(time=slice(istart,iend)),freq=20,heading=heading, config=config)
 
         if filtfreq is not None:
-            print(len(ieuler[:,0]))
             for i in range(3):
                 ieuler[:,i] = butter_highpass_filter(ieuler[:,i],filtfreq,freq)
         
