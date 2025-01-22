@@ -307,7 +307,7 @@ def l1a2l1b(l1a, config=None):
         "pitch_gyr": ("time", eulergyr[:,1]),
         "yaw_gyr": ("time", eulergyr[:,2]),
         "fusion_states": (("time","states"), istates),
-        "fusion_flags":(("time","flags"), flags),
+        "fusion_flags":(("time","flags"), flags.astype(bool)),
         "temperature": l1a.temperature,
         "pressure": l1a.pressure,
         "lat": l1a.lat,

@@ -800,12 +800,12 @@ def calc_imufusion(l1a, freq=20, heading=None, config=None):
 ## slice by large gaps
 def apply_imufusion(l1a,freq=20,gap="1h",filtfreq=None,heading=None,config=None):
     dtime = np.diff(l1a.time.values)
-    igap = np.array([-1] + list(np.argwhere(dtime>pd.Timedelta(gap)).ravel()) + [-1])
+    igap = np.array([-1] + list(np.argwhere(dtime>pd.Timedelta(gap)).ravel()) + [l1a.time.size])
 
     new = True
     for istart,iend in zip(igap[:-1]+1,igap[1:]):
-        # 'print(iend-istart)
-        # print(l1a.time.values[istart],l1a.time.values[iend])
+        if iend-istart<60:
+            continue
         itime, ieuler, iinternal_states, iflags = calc_imufusion(l1a.isel(time=slice(istart,iend)),freq=20,heading=heading, config=config)
 
         if filtfreq is not None:
@@ -824,6 +824,8 @@ def apply_imufusion(l1a,freq=20,gap="1h",filtfreq=None,heading=None,config=None)
             internal_states = np.vstack((internal_states,iinternal_states))
             flags = np.vstack((flags,iflags))
             time = np.hstack((time,itime))
+    if new:
+        return [np.nan], np.full((1,3),np.nan), np.full((1,6),np.nan), np.full((1,4),np.nan)
     return time, euler, internal_states, flags
 
 def butter_highpass(cutoff, fs, order=5):
