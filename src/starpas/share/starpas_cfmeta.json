@@ -276,6 +276,16 @@
         "zlib": true
       }
     },
+    "heave":{
+      "type":"i4",
+      "attributes":{
+        "standard_name": "platform_heave",
+        "units": "m",
+        "scale_factor":1e-3,
+        "_FillValue": 2147483647,
+        "zlib": true
+      }
+    },
     "fusion_states": {
       "type":"f4",
       "attributes":{

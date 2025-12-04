@@ -1,10 +1,12 @@
 import numpy as np
 import pandas as pd
+from functools import partial
 from scipy import signal
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize_scalar
 from scipy.stats import circmean
 from scipy.spatial.transform import Rotation as R
+from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import logging
 import importlib
@@ -174,6 +176,27 @@ def get_rate(time, data, res=10, axis=0):
                     )
     frate = lambda x: _f_interp(x, f_rate)
     return frate
+
+def rate2angle(time,data,angle0 = None):
+    """
+    Calculate angle from angle rate
+
+    Parameters
+    ----------
+    time : array-like
+        np.datetime64 time stamps
+    data : array like
+        angle rates (deg/s)
+    """
+    time = np.asarray(time.astype("datetime64[ns]"),dtype=float)
+    
+    dtime = np.diff(time,prepend=time[0])*1e-9 # seconds
+    dangle = data*dtime[:,None] # deg
+    angle = np.cumsum(dangle,axis=0)
+    if angle0 is not None:
+        angle += angle0
+
+    return angle
 
 def get_tangential_accel(time, data, radius, res=10):
     ores = time2int(np.diff(time).mean())
@@ -685,7 +708,7 @@ def calc_imufusion(l1a, freq=20, heading=None, config=None):
     acc = np.vstack([l1a.ax.data, l1a.ay.data, l1a.az.data]).T
     acc = acc*1e-3 # mg -> g
     acc = acc[:, xyz_index] * xyz_direction
-    acc *= -1. # flip acceleration for imufusion convention
+    acc *= -1. # flip acceleration for imufusion convention (positive outward)
 
     offset = imufusion.Offset(freq)
     ahrs = imufusion.Ahrs()
@@ -837,3 +860,93 @@ def butter_highpass_filter(data, cutoff, fs, order=5):
     b, a = butter_highpass(cutoff, fs, order=order)
     y = signal.filtfilt(b, a, data)
     return y
+
+
+def pendulum_rhs(t, y, accx, accz, beta, m, L):
+    """ 
+    Function to describe a dampened harmonic oscillation of multiple point masses, with external force (expressed in acceleration)
+
+    Parameters
+    ----------
+    t: np.ndarray
+        time in seconds
+    y: tuple
+        starting angle and angular velocity
+    accx: np.ndarray
+        external acceleration in horizontal direction
+    accz: np.ndarray
+        external acceleration in vertical direction (direction of gravity)
+    beta: float
+        dampening ratio: <1 regular dampening, =1 critical dampening, >1 over dampened
+    m: np.ndarray
+        list of masses (kg)
+    L: np.ndarray
+        list of length from center of ration, positive downward (m)
+
+    Returns
+    -------
+    (dtheta_dt, domega_dt): change of angle and angular velocity
+    """
+
+    m,L = np.array(m),np.array(L)
+    I = np.sum(m*L**2)
+    mL = np.sum(m*L)
+    theta, omega = y
+    # external torque
+    torque = accx(t) * np.cos(theta)
+    torque -= (9.81+accz(t)) * np.sin(theta)
+    torque *= mL/I
+    dtheta_dt = omega
+    domega_dt = - 2.*beta * omega + torque
+    return [dtheta_dt, domega_dt]
+    
+def sim_pendulum(
+    time,
+    acc,
+    angles0=(0.,0.),
+    omega0=(0.,0.),
+    pendulum={
+        "mass":np.array([100,250]), # kg, pendulum mass
+        "length": np.array([-0.2,0.4]), # m, pendulum length
+        "beta": 1, #,  dampening rate
+    }
+):
+    """
+    Calculate a pendulum swing for given external acceleration in two directions. Roll around x-axis, pitch around y-axis.
+
+    Parameters
+    ----------
+    time: np.ndarray(N), np.datetime64
+        time
+    acc: np.ndarray(N,3)
+        external acceleration in XYZ directions, (Z points downward) , (ms-2)
+    angles0: tuple(float)
+        starting angles (roll,pitch) (degrees), the default is (0.,0.)
+    omega0: tuple(float)
+        stating angular velocity (roll,pitch) (degree s-1), the default is (0.,0.)
+    pendulum: dict
+        'mass' - list of masses (kg) ,'length' - list of length from center of rotation, positive down (m); 'beta' - dampening rate
+    
+    Returns
+    -------
+    roll angle (deg), roll rate (deg/s), pitch angle (deg), pitch rate (deg/s)
+    """
+    time = 1e-9*(time-time[0]).astype("timedelta64[ns]").astype(float) # datetime64 -> float, seconds
+    L = pendulum["length"]
+    m = pendulum["mass"]
+    beta = pendulum["beta"] 
+
+    y0_roll = (angles0[0],omega0[0])
+    y0_pitch = (angles0[1],omega0[1])
+
+    accx = interp1d(time,acc[:,0],kind="linear",bounds_error=False,fill_value=(acc[0,0],acc[-1,0]))
+    accy = interp1d(time,acc[:,1],kind="linear",bounds_error=False,fill_value=(acc[0,1],acc[-1,1]))
+    accz = interp1d(time,acc[:,2],kind="linear",bounds_error=False,fill_value=(acc[0,2],acc[-1,1]))
+
+    pendulum_roll = partial(pendulum_rhs, accx=accy, accz=accz, beta=beta, m=m, L=L)
+    pendulum_pitch = partial(pendulum_rhs, accx=accx, accz=accz, beta=beta, m=m, L=L)
+
+    solve_roll = solve_ivp(pendulum_roll, (time[0],time[-1]), y0_roll, t_eval=time, method="RK45", rtol=1e-8, atol=1e-10)
+    solve_pitch = solve_ivp(pendulum_pitch, (time[0],time[-1]), y0_pitch, t_eval=time, method="RK45", rtol=1e-8, atol=1e-10)
+
+    return np.degrees(solve_roll.y[0]),np.degrees(solve_roll.y[1]),np.degrees(solve_pitch.y[0]), np.degrees(solve_pitch.y[1])

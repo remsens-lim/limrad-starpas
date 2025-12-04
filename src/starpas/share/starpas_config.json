@@ -1,16 +1,28 @@
 // Starpas default configuration
 {
   "fname_raw": "{dt:%Y%m%d%H%M}.txt",
-  "fname_out" : "{dt:%Y-%m-%d}_starpas_{campaign}_{resolution}_{datalvl}.{sfx}",
+  "fname_out": "{dt:%Y-%m-%d}_starpas_{campaign}_{resolution}_{datalvl}.{sfx}",
+  "fname_ship": "{dt:%Y%m%d}_dship_data_10hz.dat",
   // Config files
   "file_log": "starpas.log",
   "file_cfmeta": "share/starpas_cfmeta.json",
   // Sensor config
-  // Mapping sensor axis to (Bow, Portside, Up) Coordinate system
+  // Mapping sensor axis to (Bow, Starboard, Down) Coordinate system
   "axis_mapping": {
     // bowtie 2024: (sensor-x:up, sensor-y:rear, sensor-z:starboard)
     "xyz_index": [1, 2, 0], // sort axis to (sensor-y,sensor-z,sensor-x)
     "xyz_direction": [-1, 1, -1] // invert axis to (-1 sensor-y, sensor-z, -1 sensor-x)
+  },
+  "position": [-8, 6, -18], // position from the ships center of rotation, [X (pointing to head), Y (pointing to starboard), Z (pointing down)]
+  // Read Ship data csv
+  "read_csv":{ // config for pandas.read_csv to read ship data, accepts all keywords from pandas.read_csv
+    "header": null,
+    "skiprows": 3,
+    "sep": ";",
+    "encoding_errors": "ignore",
+    "parse_dates": true,
+    "index_col": 0,
+    "names": ["heading","heave","pitch","roll"] // required: "heading"(deg), "heave" (m), "pitch" (deg), "roll"(deg), order don't matter
   },
   // IMU Fusion settings
   "imufusion": {
@@ -21,6 +33,12 @@
     "acc_reject": 1, // reject accelerometer if deviates more than X deg from algo output
     "mag_reject": 1, // reject magnetometer if deviates more than X deg from algo output
     "recovery": 30 // recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
+  },
+  // Swing Simulation settings
+  "pendulum": {
+    "mass": [100,250], // (kg) list of masses to describe platform, can also be only one value, but has to be list
+    "length": [-0.2, 0.4], // (m) list of distances from center of rotation for each mass, positive downward
+    "beta": 0.8 // (-) dampening ratio: <1 regular dampening, =1 critical dampend, >1 over dampened
   },
   // Connection details
   "address": "", // IP address of FTP server

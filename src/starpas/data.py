@@ -271,21 +271,86 @@ def read_raw(fname, config=None, global_attrs=None):
     return ds
 
 
-def l1a2l1b(l1a, config=None):
+def l1a2l1b(l1a, shipds, config=None):
     config = starpas.utils.merge_config(config)
     gattrs, vattrs, vencode = get_cfmeta(config)
 
+    shipds = shipds.interp_like(l1a)
+
+    # smooth rawdata
+    swindow = 20
+    sax = np.convolve(l1a.ax.values,np.ones(swindow),'same')/swindow
+    say = np.convolve(l1a.ay.values,np.ones(swindow),'same')/swindow
+    saz = np.convolve(l1a.az.values,np.ones(swindow),'same')/swindow
+
+
+    sgx = np.convolve(l1a.gx.values,np.ones(swindow),'same')/swindow
+    sgy = np.convolve(l1a.gy.values,np.ones(swindow),'same')/swindow
+    sgz = np.convolve(l1a.gz.values,np.ones(swindow),'same')/swindow
+
+    # apply axis mapping and convention
+    xyz_index = config["axis_mapping"]["xyz_index"]
+    xyz_direction = np.array(config["axis_mapping"]["xyz_direction"])[None,:]
+
+    gyr = np.vstack([sgx, sgy, sgz]).T
+    gyr = gyr[:, xyz_index] * xyz_direction
+
+    acc = np.vstack([sax, say, saz]).T
+    acc = acc*1e-3 # mg -> g
+    acc = acc[:, xyz_index] * xyz_direction
+    acc *= -1. # flip acceleration for imufusion convention (postive outwards)
+
+    # roll /pitch from ship
+    rp = np.vstack((shipds["roll"].values,
+                    shipds["pitch"].values)).T
+    attitude_ship = starpas.utils.calc_attitude_angle(rp)
+
+    # calculate external accelerations induced by the ship movement
+    position = config["position"]
+    _,_,spACCEL  = starpas.utils.rpy2xyz_rate_accel(
+        np.vstack((rp.T,np.zeros(shipds.time.size))).T,
+        time=shipds.time.values,
+        heave=shipds["heave"].values,
+        position=position,
+    )
+    sptaccl = starpas.utils.get_tangential_accel(
+        shipds.time.values,
+        shipds.heading.values,
+        radius = np.sqrt(position[0]**2 + position[1]**2)
+    )
+
+    ship_acc_vector = spACCEL(l1a.time.values)
+    ship_acc_vector[:,0] += sptaccl(l1a.time.values)
+    ship_acc_vector[:,1] += sptaccl(l1a.time.values)
+    ship_acc_vector *= -1. # invert to match sentral algo
+
+    acc_corr = acc - ship_acc_vector
+
+    # calculate roll and pitch from corrected  acceleromater
+    rpacc = starpas.utils.xyz2rp(acc_corr)
+
+    # correct acceleration and add smoothed values in l1a
+    l1a.ax.values = acc_corr[:,0]
+    l1a.ay.values = acc_corr[:,1]
+    l1a.az.values = acc_corr[:,2]
+
+    l1a.gx.values = gyr[:,0]
+    l1a.gy.values = gyr[:,1]
+    l1a.gz.values = gyr[:,2]
+
+    # update config, as axis mapping has been applied already
+    config = {
+        **config,
+        "axis_mapping": {
+            "xyz_mapping": [0,1,2],
+            "xyz_direction": [1,1,1]
+        }
+    }
+
     # apply imufusion algorithm
     time, euler, istates, flags = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", config=config)
-    accconfig = dict(imufusion={
-        "use_mag": False, 
-        "gain": 1, 
-        "gyro_range": 2000, # gyroscope-range (deg/s)
-        "acc_reject": 5, # reject accelerometer if deviates more than X deg from algo output
-        "mag_reject": 5, # reject magnetometer if deviates more than X deg from algo output
-        "recovery": 30 # recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
-    })
-    _,euleracc,_,_ = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min" , config={**config, **accconfig})
+
+    # calculate imufusion relying only on gyro
     gyrconfig = dict(imufusion={
         "use_mag": False, 
         "gain": 0, 
@@ -300,9 +365,9 @@ def l1a2l1b(l1a, config=None):
         "roll": ("time",euler[:,0]),
         "pitch": ("time", euler[:,1]),
         "yaw": ("time", euler[:,2]),
-        "roll_acc": ("time", euleracc[:,0]),
-        "pitch_acc": ("time", euleracc[:,1]),
-        "yaw_acc": ("time", euleracc[:,2]),
+        "roll_acc": ("time", rpacc[:,0]),
+        "pitch_acc": ("time", rpacc[:,1]),
+        "yaw_acc": ("time", np.full(rpacc.shape[0],np.nan)),
         "roll_gyr": ("time", eulergyr[:,0]),
         "pitch_gyr": ("time", eulergyr[:,1]),
         "yaw_gyr": ("time", eulergyr[:,2]),
@@ -315,7 +380,11 @@ def l1a2l1b(l1a, config=None):
         "gps-speed": l1a["gps-speed"],
         "altitude": l1a.altitude,
         "gps-satellites": l1a["gps-satellites"],
-        "gps-fixquality": l1a["gps-fixquality"]
+        "gps-fixquality": l1a["gps-fixquality"],
+        "roll_ship": shipds["roll"].values,
+        "pitch_ship": shipds["pitch"].values,
+        "yaw_ship": shipds["heading"].values,
+        "heave_ship": shipds["heave"].values
     }, coords={
         "time": ("time",time),
         "states": ("states",np.arange(6)),

@@ -101,6 +101,8 @@ def raw2l1a(input_files,
 
 
 @cli.command("l1a2l1b")
+@click.argument("ship_path",nargs=1, type=click.Path(dir_okay=True, exists=True),
+              help="Path to the ship data files")
 @click.argument("input_files", nargs=-1)
 @click.argument("output_path", nargs=1)
 @click.option("--config", "-c", type=click.Path(dir_okay=False, exists=True),
@@ -111,15 +113,14 @@ def l1a2l1b(input_files,
     config = _configure(config)
     starpas.utils.init_logger(config)
 
+    ship_path = os.path.abspath(ship_path)
+
     with click.progressbar(
             input_files,
             label='Processing to l1b:',
             item_show_func=lambda a:a
     ) as files:
         for fn in files:
-            l1a = xr.load_dataset(fn)
-            l1b = starpas.data.l1a2l1b(l1a, config=config)
-
             fname_info = parse.parse(
                 config["fname_out"],
                 os.path.basename(fn)
@@ -130,6 +131,21 @@ def l1a2l1b(input_files,
                 "datalvl": "l1b",
                 "sfx": "nc"
             })
+
+            # load ship data
+            dsship = pd.read_csv(
+                os.path.join(ship_path,config["fname_ship"].format_map(fname_info)),
+                **config["read_csv"]
+            ).to_xarray().rename({"index":"time"})
+
+            # load l1a data
+            l1a = xr.load_dataset(fn)
+
+            # process to l1b
+            l1b = starpas.data.l1a2l1b(l1a, dsship, config=config)
+
+
+
             outfile = os.path.join(output_path,
                                    "{dt:%Y/%m/}",
                                    config['fname_out'])
