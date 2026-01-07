@@ -3,7 +3,7 @@ import pandas as pd
 from functools import partial
 from scipy import signal
 from scipy.interpolate import interp1d
-from scipy.optimize import minimize_scalar
+from scipy.optimize import minimize, minimize_scalar
 from scipy.stats import circmean
 from scipy.spatial.transform import Rotation as R
 from scipy.integrate import solve_ivp
@@ -281,7 +281,7 @@ def get_lag(series,reference,step=1,offset=0,plot=False):
     Returns dt, so that series(t-dt) has maximum correlation to reference(t).
     """
     noffset = int(np.round(np.array(offset).astype(float)/np.array(step).astype(float),0))
-    corr = signal.correlate(series[noffset:],reference)
+    corr = signal.correlate(series[noffset:],reference,method="direct")
     lags = signal.correlation_lags(len(series), len(reference))
     imax = np.argmax(corr)
     
@@ -388,6 +388,87 @@ def xyz2rp(xyz,rotation=(1,1), degrees=True):
 
     return rp * np.array(rotation)
 
+# def rpy2xyz_rate_accel(rpy,time, heave=None, res=10, position=(-11,4.07,-15.8),swindow=20):
+#     """
+#     calculate vector, rate and acceleration in a right handed system
+#     """
+#     def _f_interp(dt,f):
+#         dt=dt.astype('datetime64[ns]').astype(int)
+#         return f(dt)
+
+#     def time2int(x):
+#         return x.astype('datetime64[ns]').astype(int)
+
+#     position = np.array(position)
+
+    
+#     XYZa = rpy2xyz(rpy,
+#                    vector=np.array(position),
+#                    rotation=(1,1,1),
+#                    degrees=True)
+    
+#     if heave is not None:
+#         XYZa[:,2] += heave
+
+    
+#     newtime = pd.date_range(time[0],time[-1],freq=f'{res}ms')
+#     newtime = newtime.astype('datetime64[ns]').astype(int)
+
+#     f_XYZ = interp1d(time.astype('datetime64[ns]').astype(int),
+#                     XYZa,
+#                     axis=0,
+#                     kind='cubic',
+#                     bounds_error=False,
+#                     fill_value=np.nan,
+#                     assume_sorted=True,
+#                     )
+#     XYZ = f_XYZ(newtime)
+
+#     dXYZ = np.diff(XYZ,axis=0)
+#     rate = dXYZ/(res*1e-3)
+
+#     rate[:,0] = np.convolve(rate[:,0],np.ones(swindow),mode='same')/swindow
+#     rate[:,1] = np.convolve(rate[:,1],np.ones(swindow),mode='same')/swindow
+#     rate[:,2] = np.convolve(rate[:,2],np.ones(swindow),mode='same')/swindow
+
+
+#     rate_time = newtime[:-1]+(0.5*res*1e6)
+
+#     f_rate = interp1d(rate_time,
+#                      rate,
+#                      axis=0,
+#                      kind='cubic',
+#                      bounds_error=False,
+#                      fill_value=np.nan,
+#                      assume_sorted=True,
+#                     )
+
+    
+#     # drate = np.diff(rate,axis=0)
+#     drate = np.diff(dXYZ,axis=0)
+#     accel = drate / (res*1e-3)**2
+#     accel[:,0] = np.convolve(accel[:,0],np.ones(swindow),mode='same')/swindow
+#     accel[:,1] = np.convolve(accel[:,1],np.ones(swindow),mode='same')/swindow
+#     accel[:,2] = np.convolve(accel[:,2],np.ones(swindow),mode='same')/swindow
+
+#     # accel_time = rate_time[:-1]+(0.5*res*1e6)
+#     accel_time = newtime[1:-1]
+
+#     f_accel = interp1d(accel_time,
+#                       accel,
+#                       axis=0,
+#                       kind='cubic',
+#                       bounds_error=False,
+#                       fill_value=np.nan,
+#                       assume_sorted=True,
+#                      )
+
+#     fXYZ = lambda x: _f_interp(x, f_XYZ)
+#     frate = lambda x: _f_interp(x, f_rate)
+#     faccl = lambda x: _f_interp(x, f_accel)
+    
+#     return fXYZ, frate, faccl
+
 def rpy2xyz_rate_accel(rpy,time, heave=None, res=10, position=(-11,4.07,-15.8)):
     """
     calculate vector, rate and acceleration in a right handed system
@@ -405,17 +486,20 @@ def rpy2xyz_rate_accel(rpy,time, heave=None, res=10, position=(-11,4.07,-15.8)):
                         btype='lowpass', output='sos', fs=1000)
 
     
-    if heave is not None:
-        position = np.repeat(position[np.newaxis,:],
-                             repeats=rpy.shape[0],
-                             axis=0)
-        position[:,2] += heave
+    # if heave is not None:
+    #     position = np.repeat(position[np.newaxis,:],
+    #                          repeats=rpy.shape[0],
+    #                          axis=0)
+    #     position[:,2] += heave
     
     XYZa = rpy2xyz(rpy,
                    vector=np.array(position),
                    rotation=(1,1,1),
                    degrees=True)
     
+    if heave is not None:
+        XYZa[:,2] += heave
+
     
     newtime = pd.date_range(time[0],time[-1],freq=f'{res}ms')
     newtime = newtime.astype('datetime64[ns]').astype(int)
@@ -708,7 +792,7 @@ def calc_imufusion(l1a, freq=20, heading=None, config=None):
     acc = np.vstack([l1a.ax.data, l1a.ay.data, l1a.az.data]).T
     acc = acc*1e-3 # mg -> g
     acc = acc[:, xyz_index] * xyz_direction
-    acc *= -1. # flip acceleration for imufusion convention (positive outward)
+    acc *= -1. # flip acceleration for imufusion convention (positive inward)
 
     offset = imufusion.Offset(freq)
     ahrs = imufusion.Ahrs()
@@ -829,7 +913,7 @@ def apply_imufusion(l1a,freq=20,gap="1h",filtfreq=None,heading=None,config=None)
     for istart,iend in zip(igap[:-1]+1,igap[1:]):
         if iend-istart<60:
             continue
-        itime, ieuler, iinternal_states, iflags = calc_imufusion(l1a.isel(time=slice(istart,iend)),freq=20,heading=heading, config=config)
+        itime, ieuler, iinternal_states, iflags = calc_imufusion(l1a.isel(time=slice(istart,iend)),freq=freq,heading=heading, config=config)
 
         if filtfreq is not None:
             for i in range(3):
@@ -862,7 +946,45 @@ def butter_highpass_filter(data, cutoff, fs, order=5):
     return y
 
 
-def pendulum_rhs(t, y, accx, accz, beta, m, L):
+# def pendulum_rhs(t, y, accx, accz, ratex, beta, m, L):
+#     """ 
+#     Function to describe a dampened harmonic oscillation of multiple point masses, with external force (expressed in acceleration)
+
+#     Parameters
+#     ----------
+#     t: np.ndarray
+#         time in seconds
+#     y: tuple
+#         starting angle and angular velocity
+#     accx: np.ndarray
+#         external acceleration in horizontal direction
+#     accz: np.ndarray
+#         external acceleration in vertical direction (direction of gravity)
+#     beta: float
+#         dampening ratio: <1 regular dampening, =1 critical dampening, >1 over dampened
+#     m: np.ndarray
+#         list of masses (kg)
+#     L: np.ndarray
+#         list of length from center of ration, positive downward (m)
+
+#     Returns
+#     -------
+#     (dtheta_dt, domega_dt): change of angle and angular velocity
+#     """
+
+#     m,L = np.array(m),np.array(L)
+#     I = np.sum(m*L**2)
+#     mL = np.sum(m*L)
+#     theta, omega = y
+#     # external torque
+#     torque = accx(t) * np.cos(theta)
+#     torque -= (9.81+accz(t)) * np.sin(theta)
+#     torque *= mL/I
+#     dtheta_dt = omega
+#     domega_dt = - 2.*beta*np.sqrt(9.81*mL/I) * (omega - ratex(t)) + torque
+#     return [dtheta_dt, domega_dt]
+
+def pendulum_rhs(t, y, accx, accz, ratex, beta, m, L):
     """ 
     Function to describe a dampened harmonic oscillation of multiple point masses, with external force (expressed in acceleration)
 
@@ -887,22 +1009,31 @@ def pendulum_rhs(t, y, accx, accz, beta, m, L):
     -------
     (dtheta_dt, domega_dt): change of angle and angular velocity
     """
-
+    g = 9.81
     m,L = np.array(m),np.array(L)
     I = np.sum(m*L**2)
     mL = np.sum(m*L)
+    # natural frequency
+    wn = np.sqrt(9.81*mL/I)
+
+    # starting condition
     theta, omega = y
+
     # external torque
-    torque = accx(t) * np.cos(theta)
-    torque -= (9.81+accz(t)) * np.sin(theta)
-    torque *= mL/I
+    torque_acc = (wn**2/g)*(accx(t) * np.cos(theta) - accz(t) * np.sin(theta))
+    torque_frc = beta*ratex(t)/np.sqrt(I)
+    torque = torque_acc + torque_frc
+    
+    # derivative
     dtheta_dt = omega
-    domega_dt = - 2.*beta * omega + torque
+    domega_dt = - (2*beta * wn * omega) - wn**2*np.sin(theta) + torque
     return [dtheta_dt, domega_dt]
     
 def sim_pendulum(
     time,
     acc,
+    ratex=None,
+    ratey=None,
     angles0=(0.,0.),
     omega0=(0.,0.),
     pendulum={
@@ -931,22 +1062,95 @@ def sim_pendulum(
     -------
     roll angle (deg), roll rate (deg/s), pitch angle (deg), pitch rate (deg/s)
     """
-    time = 1e-9*(time-time[0]).astype("timedelta64[ns]").astype(float) # datetime64 -> float, seconds
+    if ratex is None:
+        ratex = np.zeros(len(time))
+    if ratey is None:
+        ratey = np.zeros(len(time))
+
+    stime = time[0]
+    time = 1e-9*(time-stime).astype("timedelta64[ns]").astype(float) # datetime64 -> float, seconds
     L = pendulum["length"]
     m = pendulum["mass"]
     beta = pendulum["beta"] 
 
-    y0_roll = (angles0[0],omega0[0])
-    y0_pitch = (angles0[1],omega0[1])
+    y0_roll = (np.deg2rad(angles0[0]),np.deg2rad(omega0[0]))
+    y0_pitch = (np.deg2rad(angles0[1]),np.deg2rad(omega0[1]))
 
     accx = interp1d(time,acc[:,0],kind="linear",bounds_error=False,fill_value=(acc[0,0],acc[-1,0]))
     accy = interp1d(time,acc[:,1],kind="linear",bounds_error=False,fill_value=(acc[0,1],acc[-1,1]))
-    accz = interp1d(time,acc[:,2],kind="linear",bounds_error=False,fill_value=(acc[0,2],acc[-1,1]))
+    accz = interp1d(time,acc[:,2],kind="linear",bounds_error=False,fill_value=(acc[0,2],acc[-1,2]))
+    ratex = interp1d(time,ratex,kind="linear",bounds_error=False,fill_value=(ratex[0],ratex[-1]))
+    ratey = interp1d(time,ratey,kind="linear",bounds_error=False,fill_value=(ratey[0],ratey[-1]))
 
-    pendulum_roll = partial(pendulum_rhs, accx=accy, accz=accz, beta=beta, m=m, L=L)
-    pendulum_pitch = partial(pendulum_rhs, accx=accx, accz=accz, beta=beta, m=m, L=L)
+    pendulum_roll = partial(pendulum_rhs, accx=accy, accz=accz, ratex=ratey, beta=beta, m=m, L=L)
+    pendulum_pitch = partial(pendulum_rhs, accx=accx, accz=accz, ratex=ratex, beta=beta, m=m, L=L)
 
     solve_roll = solve_ivp(pendulum_roll, (time[0],time[-1]), y0_roll, t_eval=time, method="RK45", rtol=1e-8, atol=1e-10)
     solve_pitch = solve_ivp(pendulum_pitch, (time[0],time[-1]), y0_pitch, t_eval=time, method="RK45", rtol=1e-8, atol=1e-10)
 
-    return np.degrees(solve_roll.y[0]),np.degrees(solve_roll.y[1]),np.degrees(solve_pitch.y[0]), np.degrees(solve_pitch.y[1])
+    # print(solve_roll)
+    # print(solve_pitch)
+
+    roll, rollrate = -1.* np.rad2deg(np.array(solve_roll.y)) # invert, as positive angle in y direction means actually negative roll in coordinate definition
+    pitch, pitchrate = np.rad2deg(np.array(solve_pitch.y))
+
+    rolltime = stime + (1e9*np.array(solve_roll.t)).astype("timedelta64[ns]")
+    pitchtime = stime + (1e9*np.array(solve_pitch.t)).astype("timedelta64[ns]")
+    return roll, rollrate, rolltime, pitch, pitchrate, pitchtime
+
+def optimize_position(position,time,rpy,heave,acc, plot=False):
+    """
+    Find optimal position based on measured and calculated acceleration vector
+    
+    :param position: initial position guess (x,y,z)
+    :param time: np.datetime64 np.ndarray(N) timeseries
+    :param rpy: float, np.ndarray(N,3) roll, pitch, yaw angle (degree) of ship
+    :param heave: float, np.ndarray(N) ship heave (m)
+    :param acc: float, np.ndarray(N,3) x,y,z acceleration measured with starpas (mg)
+    """
+
+    def norm_compare(position,time,rpy,heave,acc):
+        _,_,spACCEL  = rpy2xyz_rate_accel(
+            rpy,
+            time=time,
+            heave=heave,
+            position=position,
+        )
+        ship_acc_vector = spACCEL(time)
+        ship_acc_vector *= 1e3/9.81 # m s-2 -> mg
+        ship_acc_vector[:,2] += 1000 # add gravity
+
+        norm_ship = np.linalg.norm(ship_acc_vector,axis=1)
+        norm_acc = np.linalg.norm(acc,axis=1)
+        norm_ship += (np.nanmean(norm_acc)-np.nanmean(norm_ship))
+        mask = ~np.isnan(norm_ship)
+        mask *= ~np.isnan(norm_acc)
+        return 1-np.abs(np.corrcoef(norm_ship[mask],norm_acc[mask])[1,0])
+
+    func = lambda x: norm_compare(x,time,rpy,heave,acc)
+
+    res = minimize(
+        func,x0=position,
+        bounds=[
+            (position[0]-20,position[0]+20),
+            (position[1]-20,position[1]+20),
+            (position[2]-20,position[2]+20)
+        ]
+    )
+
+    if plot:
+        _,_,spACCEL  = rpy2xyz_rate_accel(
+            rpy,
+            time=time,
+            heave=heave,
+            position=np.array(res.x),
+        )
+        acc_ship = spACCEL(time)*1e3/9.81
+        acc_ship[:,2] += 1000
+        fig, ax = plt.subplots(1,1)
+        ax.scatter(np.linalg.norm(acc_ship,axis=1),np.linalg.norm(acc,axis=1))
+        ax.grid(True)
+        plt.show()
+
+
+    return res.x

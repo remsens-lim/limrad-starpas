@@ -13,10 +13,11 @@
     "xyz_index": [1, 2, 0], // sort axis to (sensor-y,sensor-z,sensor-x)
     "xyz_direction": [-1, 1, -1] // invert axis to (-1 sensor-y, sensor-z, -1 sensor-x)
   },
-  "position": [-8, 6, -18], // position from the ships center of rotation, [X (pointing to head), Y (pointing to starboard), Z (pointing down)]
+  "position": [16, -4, -18], // position from the ships center of rotation, [X (pointing to head), Y (pointing to starboard), Z (pointing down)]
   // Read Ship data csv
   "read_csv":{ // config for pandas.read_csv to read ship data, accepts all keywords from pandas.read_csv
     "header": null,
+    "na_values": [9],
     "skiprows": 3,
     "sep": ";",
     "encoding_errors": "ignore",
@@ -28,17 +29,17 @@
   "imufusion": {
     "freq": 20, // sample frequency (Hz)
     "use_mag": false, // ignore magnetometer (false), use magnetometer (true)
-    "gain": 0.333, // influence ratio of acc+mag versus gyro. 0: only gyro
+    "gain": 0.5, // influence ratio of acc+mag versus gyro. 0: only gyro
     "gyro_range": 2000, // gyroscope-range (deg/s)
     "acc_reject": 1, // reject accelerometer if deviates more than X deg from algo output
     "mag_reject": 1, // reject magnetometer if deviates more than X deg from algo output
-    "recovery": 30 // recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
+    "recovery": 5 // recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
   },
   // Swing Simulation settings
   "pendulum": {
     "mass": [100,250], // (kg) list of masses to describe platform, can also be only one value, but has to be list
     "length": [-0.2, 0.4], // (m) list of distances from center of rotation for each mass, positive downward
-    "beta": 0.8 // (-) dampening ratio: <1 regular dampening, =1 critical dampend, >1 over dampened
+    "beta": 0.3 // (-) dampening ratio: <1 regular dampening, =1 critical dampend, >1 over dampened
   },
   // Connection details
   "address": "", // IP address of FTP server
