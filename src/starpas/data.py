@@ -5,6 +5,7 @@ import xarray as xr
 import pandas as pd
 import logging
 import jstyleson as json
+from scipy import signal
 
 import starpas.utils
 
@@ -270,63 +271,175 @@ def read_raw(fname, config=None, global_attrs=None):
     ds = add_encoding(ds, vencode)
     return ds
 
+def pad_gaps(l1a,pad='10min',gap='10min'):
+    """
+    Remove values within 'pad' length from next gap of >'gap' length from dataset.
+    
+    :param l1a: l1a xarray dataset
+    :param pad: pad length string in pandas period string
+    :param gap: gap length string in pandas period string
+    """
+    dtime = np.diff(l1a.time.values)
+    igap = np.array([-1] + list(np.argwhere(dtime>pd.Timedelta(gap)).ravel()) + [l1a.time.size])
 
-def l1a2l1b(l1a, shipds, config=None):
+    newtimes = []
+    for istart,iend in zip(igap[:-1]+1,igap[1:]):
+        if iend-istart<60:
+            continue
+        time_sel = l1a.time.isel(time=slice(istart,iend)).values  
+        time_sel = l1a.time.sel(time=slice(time_sel[0]+pd.Timedelta(pad),time_sel[-1]-pd.Timedelta(pad)))
+        newtimes += list(time_sel.values)
+    
+    return l1a.sel(time=np.array(newtimes))
+
+def smooth_raw(l1a, swindow=20):
+    l1a.ax.values = np.convolve(l1a.ax.values,np.ones(swindow),'same')/swindow
+    l1a.ay.values = np.convolve(l1a.ay.values,np.ones(swindow),'same')/swindow
+    l1a.az.values = np.convolve(l1a.az.values,np.ones(swindow),'same')/swindow
+
+    l1a.gx.values = np.convolve(l1a.gx.values,np.ones(swindow),'same')/swindow
+    l1a.gy.values = np.convolve(l1a.gy.values,np.ones(swindow),'same')/swindow
+    l1a.gz.values = np.convolve(l1a.gz.values,np.ones(swindow),'same')/swindow
+    
+    l1a.mx.values = np.convolve(l1a.mx.values,np.ones(swindow),'same')/swindow
+    l1a.my.values = np.convolve(l1a.my.values,np.ones(swindow),'same')/swindow
+    l1a.mz.values = np.convolve(l1a.mz.values,np.ones(swindow),'same')/swindow
+    return l1a
+
+def smooth_ship(shipds,swindow=20):
+    shipds["roll"].values = np.convolve(shipds["roll"].values,np.ones(swindow),'same')/swindow
+    shipds["pitch"].values = np.convolve(shipds["pitch"].values,np.ones(swindow),'same')/swindow
+    shipds["heading"].values = np.convolve(shipds["heading"].values,np.ones(swindow),'same')/swindow
+    shipds["heave"].values = np.convolve(shipds["heave"].values,np.ones(swindow),'same')/swindow
+    return shipds
+
+def correct_lag(l1a, shipds, config):
+    config = starpas.utils.read_json("/Users/witthuhn/Data/bowtie/starpas/starpas_config.json")
     config = starpas.utils.merge_config(config)
-    gattrs, vattrs, vencode = get_cfmeta(config)
-
+    
+    l1a_raw = xr.load_dataset("/Users/witthuhn/Data/bowtie/starpas/l1a/2024/08/2024-08-23_starpas_bowtie_20Hz_l1a.nc")
+    shipds = pd.read_csv(
+        "/Users/witthuhn/Data/bowtie/seapath/20240823_dship_data_10hz.dat",
+        **config["read_csv"]
+    )
+    shipds = shipds.to_xarray().rename({"index":"time"})
+    
+    
+    # interpolate starpas to ship and drop nan values
+    shipds = shipds.dropna("time")
+    l1a = l1a_raw.interp_like(shipds).dropna("time")
     shipds = shipds.interp_like(l1a)
-
+    
     # smooth rawdata
     swindow = 20
     sax = np.convolve(l1a.ax.values,np.ones(swindow),'same')/swindow
     say = np.convolve(l1a.ay.values,np.ones(swindow),'same')/swindow
     saz = np.convolve(l1a.az.values,np.ones(swindow),'same')/swindow
+    
+    # apply axis mapping and convention
+    xyz_index = config["axis_mapping"]["xyz_index"]
+    xyz_direction = np.array(config["axis_mapping"]["xyz_direction"])[None,:]
+    acc = np.vstack([sax, say, saz]).T
+    acc = acc[:, xyz_index] * xyz_direction
+    
+    # roll /pitch from ship
+    rpy = np.vstack((
+        np.convolve(shipds["roll"].values,np.ones(swindow),'same')/swindow,
+        np.convolve(shipds["pitch"].values,np.ones(swindow),'same')/swindow,
+        np.convolve(shipds["heading"].values,np.ones(swindow),'same')/swindow
+    )).T
+    
+    ship_heave = -1.*shipds["heave"].values # invert heave, as our reference system points downward
+    ship_heave  = np.convolve(ship_heave,np.ones(swindow),'same')/swindow
+    
+    # calculate external accelerations induced by the ship movement
+    position = np.array(config["position"]).astype(float)
+    _,_,spACCEL  = starpas.utils.rpy2xyz_rate_accel(
+        rpy,
+        time=shipds.time.values,
+        heave=ship_heave,
+        position=position,
+    )
+    
+    ship_acc_vector = spACCEL(l1a.time.values)
+    ship_acc_vector *= 1e3/9.81 # m s-2 -> mg
+    ship_acc_vector[:,2] += 1000 # add gravitation
+    
+    
+    ### get lag between ship and sensor
+    acc_norm = np.linalg.norm(acc[:,:],axis=1)
+    ship_norm = np.linalg.norm(ship_acc_vector[:,:],axis=1)
+    
+    init_offset = 100
+    chunks = 100
+    Nsamples = int(float(acc.shape[0]-4*init_offset)/float(chunks))
+    xlags = []
+    lags = []
+    step = np.unique(np.diff(shipds.time.values))[0].astype("timedelta64[ns]")
+    for ic in range(chunks):
+        xlags.append(2*init_offset+ ic*Nsamples + Nsamples//2)
+        lags.append(init_offset + get_lag(
+            acc_norm[2*init_offset+ic*Nsamples:2*init_offset+(1+ic)*Nsamples],
+            ship_norm[init_offset+ic*Nsamples:3*init_offset+(1+ic)*Nsamples],
+            step=1
+        ))
+    
+    xlags = np.array([0]+xlags+[acc.shape[0]])*step.astype(float)
+    lags = np.array([lags[0]] + lags + [lags[-1]])
+    
+    itimes = (l1a_raw.time.values-l1a.time.values[0]).astype("timedelta64[ns]").astype(float)
+    lag = np.interp(itimes, xlags, lags)*step
+    
+    l1a_raw = l1a_raw.assign_coords({"new_time":("time",l1a_raw.time.values+lag)})
+    l1a_raw = l1a_raw.drop_vars("time").rename({"new_time":"time"})
+    return l1a_raw
 
+def l1a2l1b(l1a, shipds, config=None):
+    config = starpas.utils.merge_config(config)
+    gattrs, vattrs, vencode = get_cfmeta(config)
 
-    sgx = np.convolve(l1a.gx.values,np.ones(swindow),'same')/swindow
-    sgy = np.convolve(l1a.gy.values,np.ones(swindow),'same')/swindow
-    sgz = np.convolve(l1a.gz.values,np.ones(swindow),'same')/swindow
+    # smooth rawdata
+    l1a = smooth_raw(l1a,swindow=20)
+    l1a = pad_gaps(l1a,pad='10min',gap='10min')
+    shipds = smooth_ship(shipds,swindow=20)
+    
+    # remove nan and interpolate ship to l1a
+    l1a = l1a.dropna("time").where(~np.isnan(l1a.time),drop=True)
+    shipds = shipds.interp_like(l1a).dropna("time")
+    l1a = l1a.reindex_like(shipds)
 
     # apply axis mapping and convention
     xyz_index = config["axis_mapping"]["xyz_index"]
     xyz_direction = np.array(config["axis_mapping"]["xyz_direction"])[None,:]
 
-    gyr = np.vstack([sgx, sgy, sgz]).T
+    gyr = np.vstack([l1a.gx.values, l1a.gy.values, l1a.gz.values]).T
     gyr = gyr[:, xyz_index] * xyz_direction
 
-    acc = np.vstack([sax, say, saz]).T
-    acc = acc*1e-3 # mg -> g
+    acc = np.vstack([l1a.ax.values, l1a.ay.values, l1a.az.values]).T
     acc = acc[:, xyz_index] * xyz_direction
-    acc *= -1. # flip acceleration for imufusion convention (postive outwards)
 
     # roll /pitch from ship
-    rp = np.vstack((shipds["roll"].values,
-                    shipds["pitch"].values)).T
-    attitude_ship = starpas.utils.calc_attitude_angle(rp)
+    rpy = np.vstack((
+        shipds["roll"].values, shipds["pitch"].values, shipds["heading"].values
+    )).T
+        
+    ship_heave = -1.*shipds["heave"].values # invert heave, as our reference system points downward
 
     # calculate external accelerations induced by the ship movement
-    position = config["position"]
+    position = np.array(config["position"]).astype(float)
     _,_,spACCEL  = starpas.utils.rpy2xyz_rate_accel(
-        np.vstack((rp.T,np.zeros(shipds.time.size))).T,
-        time=shipds.time.values,
-        heave=shipds["heave"].values,
+        rpy,
+        time= shipds.time.values,
+        heave=ship_heave,
         position=position,
-    )
-    sptaccl = starpas.utils.get_tangential_accel(
-        shipds.time.values,
-        shipds.heading.values,
-        radius = np.sqrt(position[0]**2 + position[1]**2)
     )
 
     ship_acc_vector = spACCEL(l1a.time.values)
-    ship_acc_vector[:,0] += sptaccl(l1a.time.values)
-    ship_acc_vector[:,1] += sptaccl(l1a.time.values)
-    ship_acc_vector *= -1. # invert to match sentral algo
+    ship_acc_vector *= 1e3/9.81 # m s-2 -> mg
 
     acc_corr = acc - ship_acc_vector
 
-    # calculate roll and pitch from corrected  acceleromater
+    # calculate roll and pitch from corrected accelerometer
     rpacc = starpas.utils.xyz2rp(acc_corr)
 
     # correct acceleration and add smoothed values in l1a
@@ -342,7 +455,7 @@ def l1a2l1b(l1a, shipds, config=None):
     config = {
         **config,
         "axis_mapping": {
-            "xyz_mapping": [0,1,2],
+            "xyz_index": [0,1,2],
             "xyz_direction": [1,1,1]
         }
     }
@@ -351,15 +464,36 @@ def l1a2l1b(l1a, shipds, config=None):
     time, euler, istates, flags = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", config=config)
 
     # calculate imufusion relying only on gyro
-    gyrconfig = dict(imufusion={
-        "use_mag": False, 
-        "gain": 0, 
-        "gyro_range": 2000, # gyroscope-range (deg/s)
-        "acc_reject": 0, # reject accelerometer if deviates more than X deg from algo output
-        "mag_reject": 5, # reject magnetometer if deviates more than X deg from algo output
-        "recovery": 120 # recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
-    })
-    _,eulergyr,_,_ = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", filtfreq=1/60., config={**config,**gyrconfig})
+    # gyrconfig = dict(imufusion={
+    #     "use_mag": False, 
+    #     "gain": 0, 
+    #     "gyro_range": 2000, # gyroscope-range (deg/s)
+    #     "acc_reject": 0, # reject accelerometer if deviates more than X deg from algo output
+    #     "mag_reject": 5, # reject magnetometer if deviates more than X deg from algo output
+    #     "recovery": 120 # recovery trigger period in seconds (e.g. maximum time algo can depend only on gyro)
+    # })
+    # _,eulergyr,_,_ = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", filtfreq=1/60., config={**config,**gyrconfig})
+    # _,eulergyr,_,_ = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", config={**config,**gyrconfig})
+
+    # roll/pitch only from gyro
+    rpgyr = starpas.utils.rate2angle(
+        l1a.time.values,
+        gyr,
+    )
+    for i in range(rpgyr.shape[1]):
+        rpgyr[:,i] = starpas.utils.butter_highpass_filter(rpgyr[:,i],1./60.,10)
+
+    #_,eulergyr,_,_ = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", config={**config,**gyrconfig})
+
+
+    # select same time for rpacc
+    idx = np.isin(l1a.time.values,time)
+    rpacc = rpacc[idx,:]
+    rpgyr = rpgyr[idx,:]
+    ship_acc_vector = ship_acc_vector[idx,:]
+
+    shipds = shipds.sel(time=time)
+    l1a = l1a.sel(time=time)
 
     l1b = xr.Dataset({
         "roll": ("time",euler[:,0]),
@@ -368,23 +502,35 @@ def l1a2l1b(l1a, shipds, config=None):
         "roll_acc": ("time", rpacc[:,0]),
         "pitch_acc": ("time", rpacc[:,1]),
         "yaw_acc": ("time", np.full(rpacc.shape[0],np.nan)),
-        "roll_gyr": ("time", eulergyr[:,0]),
-        "pitch_gyr": ("time", eulergyr[:,1]),
-        "yaw_gyr": ("time", eulergyr[:,2]),
+        # "roll_gyr": ("time", eulergyr[:,0]),
+        # "pitch_gyr": ("time", eulergyr[:,1]),
+        # "yaw_gyr": ("time", eulergyr[:,2]),
+        "roll_gyr": ("time", rpgyr[:,0]),
+        "pitch_gyr": ("time", rpgyr[:,1]),
+        "yaw_gyr": ("time",np.full(l1a.time.size,np.nan)),
         "fusion_states": (("time","states"), istates),
         "fusion_flags":(("time","flags"), flags.astype(bool)),
         "temperature": l1a.temperature,
         "pressure": l1a.pressure,
+        "ax": ("time", l1a.ax.values),
+        "ay": ("time", l1a.ay.values),
+        "az": ("time", l1a.az.values),
+        "ax_ship": ("time", ship_acc_vector[:,0]),
+        "ay_ship": ("time", ship_acc_vector[:,1]),
+        "az_ship": ("time", ship_acc_vector[:,2]),
+        "gx": ("time", l1a.gx.values),
+        "gy": ("time", l1a.gy.values),
+        "gz": ("time", l1a.gz.values),
         "lat": l1a.lat,
         "lon": l1a.lon,
         "gps-speed": l1a["gps-speed"],
         "altitude": l1a.altitude,
         "gps-satellites": l1a["gps-satellites"],
         "gps-fixquality": l1a["gps-fixquality"],
-        "roll_ship": shipds["roll"].values,
-        "pitch_ship": shipds["pitch"].values,
-        "yaw_ship": shipds["heading"].values,
-        "heave_ship": shipds["heave"].values
+        "roll_ship": ("time",shipds["roll"].values),
+        "pitch_ship": ("time",shipds["pitch"].values),
+        "yaw_ship": ("time",shipds["heading"].values),
+        "heave_ship": ("time",shipds["heave"].values)
     }, coords={
         "time": ("time",time),
         "states": ("states",np.arange(6)),
