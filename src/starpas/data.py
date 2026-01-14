@@ -6,6 +6,7 @@ import pandas as pd
 import logging
 import jstyleson as json
 from scipy import signal
+from scipy.interpolate import interp1d
 
 import starpas.utils
 
@@ -394,6 +395,43 @@ def correct_lag(l1a, shipds, config):
     l1a_raw = l1a_raw.drop_vars("time").rename({"new_time":"time"})
     return l1a_raw
 
+
+def get_lag(time,norm1,norm2,gap='10min',window=20*60*10):
+    dtime = np.diff(time)
+    igap = np.array([-1] + list(np.argwhere(dtime>pd.Timedelta(gap)).ravel()) + [time.size])
+
+    new = True
+    times = []
+    lags = []
+    for istart,iend in zip(igap[:-1]+1,igap[1:]):
+        if iend-istart<window:
+            continue
+        itime = time[istart:iend]
+        inorm1 = norm1[istart:iend]
+        inorm2 = norm2[istart:iend]
+        jedges = np.array(list(np.arange(0,iend-istart,window))+[-1]).astype(int)
+        for i,j in enumerate(jedges[:-1]):
+            if jedges[i+1]-jedges[i]<int(window/2):
+                continue
+            ti = itime[jedges[i]+int(window/2)]
+            n1 = inorm1[jedges[i]:jedges[i+1]]
+            n2 = inorm2[jedges[i]:jedges[i+1]]
+            mask = (~np.isnan(n1))*(~np.isnan(n2))
+            c_tmp = 0
+            lag = 0
+            for lag_test in range(-29,29):
+                c = np.corrcoef(n1[30:-30-lag_test],n2[30+lag_test:-30])[1,0]
+                if 1-c < 1-c_tmp:
+                    lag = lag_test
+                    c_tmp=c
+            times.append(ti)
+            lags.append(lag)
+            print(ti,lag)
+    # f_lag = interp1d(times,lags,kind="nearest")
+    # return np.array(f_lag(time)).astype(int)
+    return int(np.nanmean(lags))
+            
+
 def l1a2l1b(l1a, shipds, config=None):
     config = starpas.utils.merge_config(config)
     gattrs, vattrs, vencode = get_cfmeta(config)
@@ -414,6 +452,7 @@ def l1a2l1b(l1a, shipds, config=None):
 
     gyr = np.vstack([l1a.gx.values, l1a.gy.values, l1a.gz.values]).T
     gyr = gyr[:, xyz_index] * xyz_direction
+    gyr *= -1 # invert for right handed sytem
 
     acc = np.vstack([l1a.ax.values, l1a.ay.values, l1a.az.values]).T
     acc = acc[:, xyz_index] * xyz_direction
@@ -423,7 +462,7 @@ def l1a2l1b(l1a, shipds, config=None):
         shipds["roll"].values, shipds["pitch"].values, shipds["heading"].values
     )).T
         
-    ship_heave = -1.*shipds["heave"].values # invert heave, as our reference system points downward
+    ship_heave = 1.*shipds["heave"].values # invert heave, as our reference system points downward
 
     # calculate external accelerations induced by the ship movement
     position = np.array(config["position"]).astype(float)
@@ -436,6 +475,29 @@ def l1a2l1b(l1a, shipds, config=None):
 
     ship_acc_vector = spACCEL(l1a.time.values)
     ship_acc_vector *= 1e3/9.81 # m s-2 -> mg
+
+    norm_ship = np.linalg.norm(ship_acc_vector-np.array([0,0,1000]),axis=1)
+    norm_acc = np.linalg.norm(acc,axis=1)
+    lag = get_lag(l1a.time.values,norm_ship,norm_acc)
+
+    if lag>0:
+        l1a = l1a.isel(time=slice(lag,None))
+        acc = acc[lag:]
+        gyr = gyr[lag:]
+        rpy = rpy[:-lag,:]
+        shipds = shipds.isel(time=slice(None,-lag))
+        ship_acc_vector = ship_acc_vector[:-lag]
+        ship_heave = ship_heave[:-lag]
+    elif lag<0:
+        l1a = l1a.isel(time=slice(None,-lag))
+        acc = acc[:-lag]
+        gyr = gyr[:-lag]
+        rpy = rpy[lag:,:]
+        shipds = shipds.isel(time=slice(lag,None))
+        ship_acc_vector = ship_acc_vector[lag:]
+        ship_heave = ship_heave[lag:]
+
+    l1a=l1a.assign_coords({"time":shipds.time})
 
     acc_corr = acc - ship_acc_vector
 
