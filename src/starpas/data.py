@@ -419,14 +419,16 @@ def get_lag(time,norm1,norm2,gap='10min',window=20*60*10):
             mask = (~np.isnan(n1))*(~np.isnan(n2))
             c_tmp = 0
             lag = 0
-            for lag_test in range(-29,29):
-                c = np.corrcoef(n1[30:-30-lag_test],n2[30+lag_test:-30])[1,0]
+            for lag_test in range(-10,10):
+                c = np.corrcoef(n1[11:-11-lag_test],n2[11+lag_test:-11])[1,0]
                 if 1-c < 1-c_tmp:
                     lag = lag_test
                     c_tmp=c
+            if lag==-10 or lag==10: # limit lag to +-10
+                continue
             times.append(ti)
             lags.append(lag)
-            print(ti,lag)
+            # print(ti,lag)
     # f_lag = interp1d(times,lags,kind="nearest")
     # return np.array(f_lag(time)).astype(int)
     return int(np.nanmean(lags))
@@ -459,13 +461,16 @@ def l1a2l1b(l1a, shipds, config=None):
 
     # roll /pitch from ship
     rpy = np.vstack((
-        shipds["roll"].values, shipds["pitch"].values, shipds["heading"].values
+        shipds["roll"].values, shipds["pitch"].values, 
+        # np.zeros(l1a.time.size)
+        shipds["heading"].values[0] - shipds["heading"].values
     )).T
         
     ship_heave = 1.*shipds["heave"].values # invert heave, as our reference system points downward
 
     # calculate external accelerations induced by the ship movement
     position = np.array(config["position"]).astype(float)
+    # print(position)
     _,_,spACCEL  = starpas.utils.rpy2xyz_rate_accel(
         rpy,
         time= shipds.time.values,
@@ -489,6 +494,7 @@ def l1a2l1b(l1a, shipds, config=None):
         ship_acc_vector = ship_acc_vector[:-lag]
         ship_heave = ship_heave[:-lag]
     elif lag<0:
+        lag *= -1
         l1a = l1a.isel(time=slice(None,-lag))
         acc = acc[:-lag]
         gyr = gyr[:-lag]
@@ -499,10 +505,10 @@ def l1a2l1b(l1a, shipds, config=None):
 
     l1a=l1a.assign_coords({"time":shipds.time})
 
-    acc_corr = acc - ship_acc_vector
+    acc_corr = acc + ship_acc_vector
 
     # calculate roll and pitch from corrected accelerometer
-    rpacc = starpas.utils.xyz2rp(acc_corr)
+    rpacc = -1.*starpas.utils.xyz2rp(acc_corr)
 
     # correct acceleration and add smoothed values in l1a
     l1a.ax.values = acc_corr[:,0]

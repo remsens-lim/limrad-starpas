@@ -1021,7 +1021,7 @@ def pendulum_rhs(t, y, accx, accz, ratex, beta, m, L):
 
     # external torque
     torque_acc = (wn**2/g)*(accx(t) * np.cos(theta) - accz(t) * np.sin(theta))
-    torque_frc = beta*ratex(t)/np.sqrt(I)
+    torque_frc = 2*beta*wn*ratex(t)
     torque = torque_acc + torque_frc
     
     # derivative
@@ -1051,6 +1051,8 @@ def sim_pendulum(
         time
     acc: np.ndarray(N,3)
         external acceleration in XYZ directions, (Z points downward) , (ms-2)
+    ratex,ratey: np.ndarray(N)
+        rotation rate of the frame (ship) (rad/s)
     angles0: tuple(float)
         starting angles (roll,pitch) (degrees), the default is (0.,0.)
     omega0: tuple(float)
@@ -1080,7 +1082,7 @@ def sim_pendulum(
     accy = interp1d(time,acc[:,1],kind="linear",bounds_error=False,fill_value=(acc[0,1],acc[-1,1]))
     accz = interp1d(time,acc[:,2],kind="linear",bounds_error=False,fill_value=(acc[0,2],acc[-1,2]))
     ratex = interp1d(time,ratex,kind="linear",bounds_error=False,fill_value=(ratex[0],ratex[-1]))
-    ratey = interp1d(time,ratey,kind="linear",bounds_error=False,fill_value=(ratey[0],ratey[-1]))
+    ratey = interp1d(time,-ratey,kind="linear",bounds_error=False,fill_value=(ratey[0],ratey[-1]))
 
     pendulum_roll = partial(pendulum_rhs, accx=accy, accz=accz, ratex=ratey, beta=beta, m=m, L=L)
     pendulum_pitch = partial(pendulum_rhs, accx=accx, accz=accz, ratex=ratex, beta=beta, m=m, L=L)
