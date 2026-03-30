@@ -91,13 +91,10 @@ def raw2l1a(input_files,
         ) as files:
             for fn in files:
                 dst = starpas.data.read_raw(fn, config=config)
-                ds = xr.merge((ds,dst),compat="no_conflicts",join="outer")
-
-
-
+                ds = ds.merge(dst,compat="no_conflicts",join="outer")
 
         # add global coverage attributes
-        ds.attrs.update({"raw_files": udate_files})
+        ds.attrs.update({"raw_files": [ os.path.basename(fn) for fn in udate_files ]})
 
         fname_info = parse.parse(
             config["fname_raw"],
