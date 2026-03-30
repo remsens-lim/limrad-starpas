@@ -68,30 +68,48 @@ def raw2l1a(input_files,
     config = _configure(config)
     starpas.utils.init_logger(config)
 
-    with click.progressbar(
-            input_files,
-            label='Processing to l1a:',
-            item_show_func=lambda a:a
-    ) as files:
-        for fn in files:
-            ds = starpas.data.read_raw(fn, config=config)
-            fname_info = parse.parse(
-                config["fname_raw"],
-                os.path.basename(fn)
-            ).named
-            fname_info.update({
-                "table": "complete",
-                "campaign": config["campaign"],
-                "resolution": "20Hz",
-                "datalvl": "l1a",
-                "sfx": "nc"
-            })
-            outfile = os.path.join(output_path,
-                                   "{dt:%Y/%m/}",
-                                   config['fname_out'])
-            outfile = outfile.format_map(fname_info)
+    # scan files
+    fdates = []
+    for fn in input_files:
+        fname_info = parse.parse(
+            config["fname_raw"],
+            os.path.basename(fn)
+        ).named
+        fdates.append(pd.to_datetime(np.datetime64(fname_info["dt"]).astype("datetime64[D]")))
 
-            starpas.data.to_netcdf(ds, fname=outfile)
+    unique_out = np.unique_inverse(fdates)
+    udates = unique_out.values
+    uidx = unique_out.inverse_indices
+
+    for i, date in enumerate(udates):
+        udate_files = input_files[uidx==i]
+        ds = xr.Dataset()
+        with click.progressbar(
+                udate_files,
+                label=f'Processing {date:%Y-%m-%d} files to l1a:',
+                item_show_func=lambda a:a
+        ) as files:
+            for fn in files:
+                dst = starpas.data.read_raw(fn, config=config)
+                ds = xr.merge((ds,dst),compat="no_conflicts",join="outer")
+
+        fname_info = parse.parse(
+            config["fname_raw"],
+            os.path.basename(fn)
+        ).named
+        fname_info.update({
+            "table": "complete",
+            "campaign": config["campaign"],
+            "resolution": "20Hz",
+            "datalvl": "l1a",
+            "sfx": "nc"
+        })
+        outfile = os.path.join(output_path,
+                            "{dt:%Y/%m/}",
+                            config['fname_out'])
+        outfile = outfile.format_map(fname_info)
+
+        starpas.data.to_netcdf(ds, fname=outfile)
     # add readme to output path
     fname_readme = os.path.join(
         importlib.resources.files("starpas"),

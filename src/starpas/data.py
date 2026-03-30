@@ -138,6 +138,7 @@ def merge_ds(ds1, ds2, timevar="time"):
     ## merge both datasets
     ds_new=ds1.merge(ds2,
                      compat='no_conflicts',
+                     join='outer',
                      overwrite_vars=overwrite_vars)
 
     # add global coverage attributes
