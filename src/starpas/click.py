@@ -168,7 +168,7 @@ def l1a2l1b(
                 )
                 dsship = dsship.to_xarray().rename({"index":"time"})
             except Exception as e:
-                print(e)
+                logger.warning(f"Skipping {os.path.basename(fn)} - No seapath file {os.path.join(ship_path,config["fname_ship"].format_map(fname_info))}")
                 continue
 
             # load l1a data

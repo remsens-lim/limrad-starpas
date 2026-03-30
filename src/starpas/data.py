@@ -538,7 +538,7 @@ def l1a2l1b(l1a, shipds, config=None):
     }
 
     # apply imufusion algorithm
-    time, euler, istates, flags = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", config=config)
+    #time, euler, istates, flags = starpas.utils.apply_imufusion(l1a, freq=config["imufusion"]["freq"], gap="10min", config=config)
 
     # calculate imufusion relying only on gyro
     # gyrconfig = dict(imufusion={
@@ -564,18 +564,18 @@ def l1a2l1b(l1a, shipds, config=None):
 
 
     # select same time for rpacc
-    idx = np.isin(l1a.time.values,time)
-    rpacc = rpacc[idx,:]
-    rpgyr = rpgyr[idx,:]
-    ship_acc_vector = ship_acc_vector[idx,:]
+    # idx = np.isin(l1a.time.values,time)
+    # rpacc = rpacc[idx,:]
+    # rpgyr = rpgyr[idx,:]
+    # ship_acc_vector = ship_acc_vector[idx,:]
 
-    shipds = shipds.sel(time=time)
-    l1a = l1a.sel(time=time)
+    # shipds = shipds.sel(time=time)
+    # l1a = l1a.sel(time=time)
 
     l1b = xr.Dataset({
-        "roll": ("time",euler[:,0]),
-        "pitch": ("time", euler[:,1]),
-        "yaw": ("time", euler[:,2]),
+        #"roll": ("time",euler[:,0]),
+        #"pitch": ("time", euler[:,1]),
+        #"yaw": ("time", euler[:,2]),
         "roll_acc": ("time", rpacc[:,0]),
         "pitch_acc": ("time", rpacc[:,1]),
         "yaw_acc": ("time", np.full(rpacc.shape[0],np.nan)),
@@ -585,8 +585,8 @@ def l1a2l1b(l1a, shipds, config=None):
         "roll_gyr": ("time", rpgyr[:,0]),
         "pitch_gyr": ("time", rpgyr[:,1]),
         "yaw_gyr": ("time",np.full(l1a.time.size,np.nan)),
-        "fusion_states": (("time","states"), istates),
-        "fusion_flags":(("time","flags"), flags.astype(bool)),
+        #"fusion_states": (("time","states"), istates),
+        #"fusion_flags":(("time","flags"), flags.astype(bool)),
         "temperature": l1a.temperature,
         "pressure": l1a.pressure,
         "ax": ("time", l1a.ax.values),
@@ -609,16 +609,16 @@ def l1a2l1b(l1a, shipds, config=None):
         "yaw_ship": ("time",shipds["heading"].values),
         "heave_ship": ("time",shipds["heave"].values)
     }, coords={
-        "time": ("time",time),
-        "states": ("states",np.arange(6)),
-        "flags": ("flags", np.arange(4))
+        "time": ("time",l1a.time.values),
+        #"states": ("states",np.arange(6)),
+        #"flags": ("flags", np.arange(4))
     })
 
 
     now = pd.to_datetime(np.datetime64("now"))
     gattrs.update({
-        'imufusion_axismapping': json.dumps(config["axis_mapping"]),
-        'imufusion_settings': json.dumps(config["imufusion"]),
+        #'imufusion_axismapping': json.dumps(config["axis_mapping"]),
+        #'imufusion_settings': json.dumps(config["imufusion"]),
         'processing_level': 'l1b',
         'product_version': starpas.__version__,
         'history': f'{now.isoformat()}: Generated level l1b  by starpas version {starpas.__version__}; ',

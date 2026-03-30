@@ -122,7 +122,7 @@ def init_logger(config):
     logging.basicConfig(
         filename=fname,
         encoding='utf-8',
-        level=logging.DEBUG,
+        level=logging.INFO,
         format='%(asctime)s %(name)s %(levelname)s:%(message)s'
     )
 
