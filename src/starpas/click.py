@@ -82,7 +82,7 @@ def raw2l1a(input_files,
     uidx = unique_out.inverse_indices
 
     for i, date in enumerate(udates):
-        udate_files = input_files[uidx==i]
+        udate_files = np.array(input_files)[uidx==i]
         ds = xr.Dataset()
         with click.progressbar(
                 udate_files,
