@@ -83,7 +83,8 @@ def raw2l1a(input_files,
 
     for i, date in enumerate(udates):
         udate_files = np.array(input_files)[uidx==i]
-        ds = xr.Dataset()
+        
+        new = True
         with click.progressbar(
                 udate_files,
                 label=f'Processing {date:%Y-%m-%d} files to l1a:',
@@ -91,7 +92,11 @@ def raw2l1a(input_files,
         ) as files:
             for fn in files:
                 dst = starpas.data.read_raw(fn, config=config)
-                ds = ds.merge(dst,compat="no_conflicts",join="outer")
+                if new:
+                    ds = dst.copy()
+                    new = False
+                else:
+                    ds = ds.merge(dst,compat="no_conflicts",join="outer")
 
         # add global coverage attributes
         ds.attrs.update({"raw_files": [ os.path.basename(fn) for fn in udate_files ]})
