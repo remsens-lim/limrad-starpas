@@ -93,6 +93,12 @@ def raw2l1a(input_files,
                 dst = starpas.data.read_raw(fn, config=config)
                 ds = xr.merge((ds,dst),compat="no_conflicts",join="outer")
 
+
+
+
+        # add global coverage attributes
+        ds.attrs.update({"raw_files": udate_files})
+
         fname_info = parse.parse(
             config["fname_raw"],
             os.path.basename(fn)

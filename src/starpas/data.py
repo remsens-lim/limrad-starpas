@@ -168,6 +168,7 @@ def to_netcdf(ds, fname, timevar="time"):
 
     # save to netCDF4
     ds = update_coverage_meta(ds, timevar=timevar)
+    ds = add_encoding(ds)
     ds.to_netcdf(fname)
 
 
