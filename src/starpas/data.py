@@ -121,25 +121,32 @@ def update_coverage_meta(ds, timevar='time'):
 def merge_ds(ds1, ds2, timevar="time"):
     """Merge two datasets along the time dimension.
     """
+    setdifftime = np.setdiff1d(ds1[timevar].values,ds2[timevar].values)
+    if len(setdifftime) == 0:
+        # no additional time samples are in the old ds1
+        logger.info("Overwrite existing file.")
+        return ds2
     logger.info("Merge with existing file.")
 
+    ## overwrite non time dependent variables
+    overwrite_vars = [ v for v in ds1 if timevar not in ds1[v].dims ]
+
+    ## just use data unique in the old ds1
+    # (replace by new ds2 samples if samples overlap)
+    ds1 = ds1.interp(time=setdifftime)
+
     ## merge both datasets
-    ds_new = xr.merge((ds1, ds2))
+    ds_new=ds1.merge(ds2,
+                     compat='no_conflicts',
+                     overwrite_vars=overwrite_vars)
 
-    if isinstance(ds1.raw_files,str):
-        ds1files = [ds1.raw_files]
-    else:
-        ds1files = ds1.raw_files
-
-    raw_files = list(np.unique(ds1files + ds2.raw_files))
     # add global coverage attributes
-    ds_new.attrs.update({"raw_files": raw_files})
-
-    ds_new = update_coverage_meta(ds_new, timevar=timevar)
+    ds_new.attrs.update({'merged':1})
 
     # add encoding again
     ds_new = add_encoding(ds_new)
     return ds_new
+
 
 def to_netcdf(ds, fname, timevar="time"):
     """xarray to netcdf, but merge if exist
