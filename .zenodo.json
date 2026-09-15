@@ -1,0 +1,25 @@
+{
+  "title": "LIMRAD94 STARPAS",
+  "creators": [
+    {
+      "name": "Witthuhn, Jonas",
+      "orcid": "0000-0002-4818-5011",
+      "affiliation": "Leipzig Institute for Meteorology, University of Leipzig, Leipzig, Germany"
+    },
+    {
+      "name": "Wolter, Steffen",
+      "affiliation": "Leipzig Institute for Meteorology, University of Leipzig, Leipzig, Germany"
+    },
+    {
+      "name": "Kalesse-Los, Heike",
+      "orcid": "0000-0001-6699-7040",
+      "affiliation": "Leipzig Institute for Meteorology, University of Leipzig, Leipzig, Germany"
+    }
+  ],
+  "keywords": [
+    "cloud",
+    "radar",
+    "ship",
+    "stabilization"
+  ]
+}
